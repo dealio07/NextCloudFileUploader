@@ -1,80 +1,82 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
-using System.Net;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Uploader
 {
 	class Program
 	{
-		private const string ServerUrl = "https://cloud.rozetka.ua/remote.php/webdav/"; // Адрес удаленного хранилища
-		private const string DBServerName = "crm-dev";	// Имя сервера базы
-		private const string InitialCatalog = "DOdevVarha"; // Имя базы
+		/// <summary>
+		/// Логин на NextCloud
+		/// </summary>
+		public static string UserName = "varga";    // TODO: Очистить
 
-		private static string _userName = ""; // Логин на NextCloud
-		private static string _password = ""; // Пароль от аккаунта на NextCloud
-		private static SqlDataReader _reader;
+		/// <summary>
+		/// Пароль от аккаунта на NextCloud
+		/// </summary>
+		public static string Password = "qiz2Zs";	// TODO: Очистить
+
+		private static readonly string[] Entities = {"Account", "Contact", "Contract"};
+		static List<File> files = new List<File>();
+
+		/// <summary>
+		/// Адрес удаленного хранилища
+		/// </summary>
+		private const string ServerUrl = "https://cloud.rozetka.ua/remote.php/webdav/";
+
+		/// <summary>
+		/// Имя сервера базы
+		/// </summary>
+		private const string DbServerName = "crm-dev";  // TODO: Заменить
+
+		/// <summary>
+		/// Имя базы
+		/// </summary>
+		private const string InitialCatalog = "DOdevVarha"; // TODO: Заменить
+
+		private const string Top = "top(5)";	// TODO: Убрать в проде
+
+		private static WebDavProvider _webDavProvider;
 
 		static async Task Main(string[] args)
 		{
-			var watch = System.Diagnostics.Stopwatch.StartNew();
+			_webDavProvider = new WebDavProvider(ServerUrl);
 
-			if (string.IsNullOrEmpty(_userName))
+			if (string.IsNullOrEmpty(UserName))
 			{
-				Console.WriteLine("Введите логин:");
-				_userName = Console.ReadLine();
+				AskUserForName();
 			}
 
-			if (string.IsNullOrEmpty(_password))
+			if (string.IsNullOrEmpty(Password))
 			{
-				Console.WriteLine("Введите пароль:");
-				_password = MaskPassword();
+				AskUserForPassword();
 			}
 
-			using (var connection = new SqlConnection("Data Source=" + DBServerName + ";Initial Catalog=" + InitialCatalog + ";Trusted_Connection=True;"))
+			using (var connection = new SqlConnection("Data Source=" + DbServerName + ";Initial Catalog=" + InitialCatalog + ";Trusted_Connection=True;"))
 			{
 				try
 				{
 					connection.Open();
 
-					string entity = "Contract";
-					string cmdSqlCommand =
-						"SELECT top(10) cf." + entity + "Id, cf.Id, ptfv.PTVersion, ptfv.PTData from [dbo].[" + entity + "File] cf , [dbo].PTFileVersion ptfv " +
-						"WHERE ptfv.PTFile = cf.Id"; // TODO: поменять на выбор всех файлов
-
-					SqlCommand select = new SqlCommand(cmdSqlCommand);
-					select.Connection = connection;
-
-					_reader = select.ExecuteReader(System.Data.CommandBehavior.Default);
-
-					if (_reader != null && !_reader.IsClosed && _reader.HasRows)
+					foreach (var entity in Entities)
 					{
-						while (_reader.Read())
-						{
-							string entityId = _reader.GetValue(0).ToString();
-							string fileId = _reader.GetValue(1).ToString();
-							string fileVersion = _reader.GetValue(2).ToString();
-							byte[] fileData = (byte[]) _reader.GetValue(3);
-
-							string directoryName = entity + "/" + entityId + "/" + fileId;
-							string remoteDirectoryPath = "";
-
-							List<string> directoryNameList = SplitDirectoryName(directoryName);
-
-
-							if (directoryNameList.Count > 0)
-									remoteDirectoryPath = await CreateAdditionalDirectories(directoryNameList);
-
-							if (string.IsNullOrEmpty(directoryName))
+						using (var reader = InitSqlCommand(entity, connection))
+							if (reader != null && !reader.IsClosed && reader.HasRows)
 							{
-								Console.WriteLine("Сохраняем в основной папке.");
+								while (reader.Read())
+								{
+									await FillFileList(entity, reader);
+								}
 							}
-
-							// PUT file(s)
-							await Put(entity, entityId, fileId, fileVersion, fileData, remoteDirectoryPath, directoryNameList);
-						}
 					}
+
+					var result = Parallel.ForEach(files,
+						async (file) => await _webDavProvider.Put(file));
+					Console.WriteLine($"Status: {result.IsCompleted}");
+
+
 				}
 				catch (Exception ex)
 				{
@@ -82,37 +84,85 @@ namespace Uploader
 				}
 				finally
 				{
-					watch.Stop();
-					var elapsedMs = watch.ElapsedMilliseconds;
 					Console.WriteLine();
-					Console.WriteLine($"Прошло времени: {elapsedMs}");
-					Console.WriteLine("Нажмите Enter, чтобы закрыть программу.");
 					Console.ReadLine();
 				}
 			}
 		}
 
 		/// <summary>
-		/// Создает дополнительные директории из списка directoryNameList
+		/// Просит пользователя ввести логин.
 		/// </summary>
-		private static async Task<string> CreateAdditionalDirectories(List<string> directoryNameList)
+		private static void AskUserForName()
 		{
-			string remoteDirectoryPath = "";
-			foreach (var directoryName in directoryNameList)
+			Console.WriteLine("Введите логин:");
+			UserName = Console.ReadLine();
+		}
+
+		/// <summary>
+		/// Просит пользователя ввести пароль. Символы пароля маскируются "*".
+		/// </summary>
+		private static void AskUserForPassword()
+		{
+			Console.WriteLine("Введите пароль:");
+			Password = ReadAndMaskInputPassword();
+		}
+
+		/// <summary>
+		/// Выполняет запрос в базу
+		/// </summary>
+		/// <param name="entity">Название сущности</param>
+		/// <param name="connection">Соединение с базой</param>
+		/// <returns>Возвращает SqlDataReader</returns>
+		private static SqlDataReader InitSqlCommand(string entity, SqlConnection connection)
+		{
+			string cmdSqlCommand = "";
+
+			if (entity.Equals("Account") || entity.Equals("Contact"))
+				cmdSqlCommand = $"SELECT {Top} f.{entity}Id, f.Id, f.Version, f.Data from [dbo].[{entity}File] f"; // TODO: поменять на выбор всех файлов
+			if (entity.Equals("Contract"))
+				cmdSqlCommand = $"SELECT {Top} f.{entity}Id, f.Id, fv.PTVersion, fv.PTData from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv " +
+					"WHERE fv.PTFile = f.Id"; // TODO: поменять на выбор всех файлов
+
+			SqlCommand select = new SqlCommand(cmdSqlCommand);
+			select.Connection = connection;
+			return select.ExecuteReader(System.Data.CommandBehavior.Default);
+		}
+
+		/// <summary>
+		/// Заполняет список файлов
+		/// </summary>
+		/// <param name="entity">Название сущности</param>
+		/// <param name="reader">SqlDataReader</param>
+		/// <returns></returns>
+		private static async Task FillFileList(string entity, SqlDataReader reader)
+		{
+			string entityId = reader.GetValue(0).ToString();
+			string fileId = reader.GetValue(1).ToString();
+			string fileVersion = reader.GetValue(2).ToString();
+			byte[] fileData = (byte[]) reader.GetValue(3);
+
+			string directoryName = $"{entity}File/{entityId}/{fileId}";
+
+			List<string> directoryNameList = SplitDirectoryName(directoryName);
+
+
+			if (directoryNameList.Count > 0)
+				await _webDavProvider.CreateAdditionalDirectories(directoryNameList); //TODO: Вынести
+
+			if (string.IsNullOrEmpty(directoryName))
 			{
-				await MKCOL(ServerUrl + remoteDirectoryPath, directoryName);
-				if (!remoteDirectoryPath.Contains(directoryName))
-					remoteDirectoryPath += directoryName + "/";
+				Console.WriteLine("Сохраняем в основной папке.");
 			}
-			
-			return remoteDirectoryPath;
+
+			files.Add(new File($"{entity}File", entityId, fileId, fileVersion, fileData, directoryNameList));
 		}
 
 		/// <summary>
 		/// Маскирует символы вводимого в консоли пароля символами: "*"
 		/// </summary>
 		/// <returns>Возвращает пароль</returns>
-		private static string MaskPassword()
+		private static string ReadAndMaskInputPassword()
 		{
 			string password = "";
 			do
@@ -176,172 +226,6 @@ namespace Uploader
 			}
 
 			return directoryNameList;
-		}
-
-		/// <summary>
-		/// Помещает файл в файловое хранилище
-		/// </summary>
-		/// <param name="fileId">ID файла</param>
-		/// <param name="fileData">Файл в битовом массиве</param>
-		/// <param name="fileVersion">Версия файла</param>
-		/// <param name="fileExtension">Расширение файла</param>
-		private static async Task Put(string entity, string entityId, string fileId, string fileVersion, byte[] fileData, string remoteDirectoryPath, List<string> directoryNameList)
-		{
-			try
-			{
-				// Create an HTTP request for the URL.
-				HttpWebRequest httpPutRequest =
-			   (HttpWebRequest)WebRequest.Create(ServerUrl + remoteDirectoryPath + fileVersion);
-
-				// Set up new credentials.
-				httpPutRequest.Credentials =
-				   new NetworkCredential(_userName, _password);
-
-				// Pre-authenticate the request.
-				httpPutRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
-				httpPutRequest.Method = @"PUT";
-
-				// Specify that overwriting the destination is allowed.
-				httpPutRequest.Headers.Add(@"Overwrite", @"T");
-
-				// Specify the content length.
-				//httpPutRequest.ContentLength = _fileInfo.Length;
-				httpPutRequest.ContentLength = fileData.Length;
-
-				// Retrieve the request stream.
-				using (var requestStream = httpPutRequest.GetRequestStream())
-				{
-					await requestStream.WriteAsync(fileData, 0, fileData.Length);
-					// Close the request stream.
-					//requestStream.Close();
-				}
-
-				// Retrieve the response.
-				HttpWebResponse httpPutResponse = (HttpWebResponse)(await httpPutRequest.GetResponseAsync());
-
-				if (httpPutResponse != null)
-				{
-					// Write the response status to the console.
-					Console.WriteLine(@"Загрузка файла: {0}",
-						httpPutResponse.StatusDescription);
-				}
-			}
-			catch (Exception ex)
-			{
-				if (!ex.Message.Contains("405"))
-				{
-					if (!ex.Message.Contains("404"))
-					{
-						Console.WriteLine();
-						Console.WriteLine("Ошибка: " + ex.Message);
-					}
-					else
-						Console.WriteLine("Конечная папка не найдена. Создаем папку");
-				}
-
-				if (ex.Message.Contains("404"))
-				{
-					if (directoryNameList.Count > 0)
-					{
-						await CreateAdditionalDirectories(directoryNameList);
-					}
-					else
-					{
-						await MKCOL(ServerUrl, remoteDirectoryPath, entity, entityId, fileId, fileVersion, fileData, directoryNameList);
-					}
-				}
-			}
-		}
-
-		/// <summary>
-		/// Создает и выполняет запрос для создания директории в хранилище
-		/// </summary>
-		/// <param name="url">Адрес сервера</param>
-		/// <param name="remoteDirectoryPath">Адрес директории</param>
-		/// <param name="fileId">ID файла</param>
-		/// <param name="fileData">Файл в битовом массиве</param>
-		/// <param name="fileVersion">Версия файла</param>
-		/// <param name="fileExtension">Расширение файла</param>
-		private static async Task MKCOL(string url, string remoteDirectoryPath, string entity, string entityId, string fileId, string fileVersion, byte[] fileData, List<string> directoryNameList)
-		{
-			try
-			{
-				// Create an HTTP request for the URL.
-				HttpWebRequest httpMkColRequest =
-					(HttpWebRequest)WebRequest.Create(url + remoteDirectoryPath);
-
-				// Set up new credentials.
-				httpMkColRequest.Credentials =
-					new NetworkCredential(_userName, _password);
-
-				// Pre-authenticate the request.
-				httpMkColRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
-				httpMkColRequest.Method = @"MKCOL";
-
-				// Retrieve the response.
-				HttpWebResponse httpMkColResponse =
-					(HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
-
-				// Write the response status to the console.
-				Console.WriteLine();
-				Console.WriteLine(@"Создание папки: {0}",
-					httpMkColResponse.StatusDescription);
-
-				if (httpMkColResponse.StatusCode == HttpStatusCode.Created && fileData.Length > 0)
-					await Put(entity, entityId, fileId, fileVersion, fileData, remoteDirectoryPath, directoryNameList);
-			}
-			catch (Exception ex)
-			{
-				if (!ex.Message.Contains("405"))
-				{
-					throw ex;
-				}
-			}
-		}
-
-		/// <summary>
-		/// Создает и выполняет запрос для создания директории в хранилище
-		/// </summary>
-		/// <param name="url">Адрес сервера</param>
-		/// <param name="remoteDirectoryPath">Адрес директории</param>
-		private static async Task MKCOL(string url, string remoteDirectoryPath)
-		{
-			try
-			{
-				// Create an HTTP request for the URL.
-				HttpWebRequest httpMkColRequest =
-					(HttpWebRequest)WebRequest.Create(url + remoteDirectoryPath);
-
-				// Set up new credentials.
-				httpMkColRequest.Credentials =
-					new NetworkCredential(_userName, _password);
-
-				// Pre-authenticate the request.
-				httpMkColRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
-				httpMkColRequest.Method = @"MKCOL";
-
-				// Retrieve the response.
-				HttpWebResponse httpMkColResponse =
-					(HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
-
-				// Write the response status to the console.
-				Console.WriteLine();
-				Console.WriteLine(@"Создание папки: {0}",
-					httpMkColResponse.StatusDescription);
-			}
-			catch (Exception ex)
-			{
-				if (!ex.Message.Contains("405"))
-				{
-					throw ex;
-				}
-			}
 		}
 	}
 
