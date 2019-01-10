@@ -23,13 +23,8 @@ namespace Uploader
 		/// <param name="directoryNameList">Список директорий</param>
 		public async Task<string> CreateAdditionalDirectories(List<string> directoryNameList)
 		{
-			string remoteDirectoryPath = "";
-			/*Parallel.ForEach(directoryNameList, async directory =>
-			{
-				await MKCOL(ServerUrl + remoteDirectoryPath, directory);
-				if (!remoteDirectoryPath.Contains(directory))
-					remoteDirectoryPath += directory + "/";
-			});*/
+			var remoteDirectoryPath = "";
+			if (directoryNameList == null) return remoteDirectoryPath;
 			foreach (var directoryName in directoryNameList)
 			{
 				await MKCOL(ServerUrl + remoteDirectoryPath, directoryName);
@@ -46,66 +41,67 @@ namespace Uploader
 		/// <param name="file">Загружаемый файл</param>
 		public async Task Put(File file)
 		{
-			try
-			{
-				// Create an HTTP request for the URL.
-				HttpWebRequest httpPutRequest = (HttpWebRequest) WebRequest.Create(ServerUrl + file.GetRemotePath());
-
-				// Set up new credentials.
-				httpPutRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
-
-				// Pre-authenticate the request.
-				httpPutRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
-				httpPutRequest.Method = @"PUT";
-
-				// Specify that overwriting the destination is allowed.
-				httpPutRequest.Headers.Add(@"Overwrite", @"T");
-
-				// Specify the content length.
-				httpPutRequest.ContentLength = file.Data.Length;
-
-				// Retrieve the request stream.
-				using (var requestStream = httpPutRequest.GetRequestStream())
+			if (file?.Data != null && file.DirectoryNames?.Count > 0)
+				try
 				{
-					await requestStream.WriteAsync(file.Data, 0, file.Data.Length);
-				}
+					// Create an HTTP request for the URL.
+					var httpPutRequest = (HttpWebRequest)WebRequest.Create(ServerUrl + file.GetRemotePath());
 
-				// Retrieve the response.
-				HttpWebResponse httpPutResponse = (HttpWebResponse) (await httpPutRequest.GetResponseAsync());
+					// Set up new credentials.
+					httpPutRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
 
-				if (httpPutResponse != null)
-				{
-					// Write the response status to the console.
-					Console.WriteLine($"Загрузка файла {file.GetRemotePath()}: {httpPutResponse.StatusDescription}");
-				}
-			}
-			catch (Exception ex)
-			{
-				if (!ex.Message.Contains("405"))
-				{
-					if (!ex.Message.Contains("404"))
+					// Pre-authenticate the request.
+					httpPutRequest.PreAuthenticate = true;
+
+					// Define the HTTP method.
+					httpPutRequest.Method = @"PUT";
+
+					// Specify that overwriting the destination is allowed.
+					httpPutRequest.Headers.Add(@"Overwrite", @"T");
+
+					// Specify the content length.
+					httpPutRequest.ContentLength = file.Data.Length;
+
+					// Retrieve the request stream.
+					using (var requestStream = httpPutRequest.GetRequestStream())
 					{
-						Console.WriteLine();
-						Console.WriteLine($"Ошибка: {ex.Message}");
+						await requestStream.WriteAsync(file.Data, 0, file.Data.Length);
 					}
-					else
-						Console.WriteLine("Конечная папка не найдена. Создаем папку");
-				}
 
-				if (ex.Message.Contains("404"))
-				{
-					if (file.DirectoryNames.Count > 0)
+					// Retrieve the response.
+					var httpPutResponse = (HttpWebResponse)(await httpPutRequest.GetResponseAsync());
+
+					if (httpPutResponse != null)
 					{
-						await CreateAdditionalDirectories(file.DirectoryNames);
-					}
-					else
-					{
-						await MKCOL(file);
+						// Write the response status to the console.
+						Console.WriteLine($"Загрузка файла {file.GetRemotePath()}: {httpPutResponse.StatusDescription}");
 					}
 				}
-			}
+				catch (Exception ex)
+				{
+					if (!ex.Message.Contains("405"))
+					{
+						if (!ex.Message.Contains("404"))
+						{
+							Console.WriteLine();
+							Console.WriteLine($"Ошибка: {ex.Message}");
+						}
+						else
+							Console.WriteLine("Конечная папка не найдена. Создаем папку");
+					}
+
+					if (ex.Message.Contains("404"))
+					{
+						if (file.DirectoryNames.Count > 0)
+						{
+							await CreateAdditionalDirectories(file.DirectoryNames);
+						}
+						else
+						{
+							await MKCOL(file);
+						}
+					}
+				}
 		}
 
 		/// <summary>
@@ -114,40 +110,38 @@ namespace Uploader
 		/// <param name="file">Добавляемый файл</param>
 		public async Task MKCOL(File file)
 		{
-			try
-			{
-				// Create an HTTP request for the URL.
-				HttpWebRequest httpMkColRequest =
-					(HttpWebRequest)WebRequest.Create(ServerUrl + file.GetRemoteDirectoryPath());
-
-				// Set up new credentials.
-				httpMkColRequest.Credentials =
-					new NetworkCredential(Program.UserName, Program.Password);
-
-				// Pre-authenticate the request.
-				httpMkColRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
-				httpMkColRequest.Method = @"MKCOL";
-
-				// Retrieve the response.
-				HttpWebResponse httpMkColResponse =
-					(HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
-
-				// Write the response status to the console.
-				Console.WriteLine();
-				Console.WriteLine($"Создание папки \"{file.GetRemoteDirectoryPath()}\": {httpMkColResponse.StatusDescription}");
-
-				if (httpMkColResponse.StatusCode == HttpStatusCode.Created && file.Data.Length > 0)
-					await Put(file);
-			}
-			catch (Exception ex)
-			{
-				if (!ex.Message.Contains("405"))
+			if (file?.DirectoryNames?.Count > 0)
+				try
 				{
-					throw;
+					// Create an HTTP request for the URL.
+					var httpMkColRequest = (HttpWebRequest)WebRequest.Create(ServerUrl + file.GetRemoteDirectoryPath());
+
+					// Set up new credentials.
+					httpMkColRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
+
+					// Pre-authenticate the request.
+					httpMkColRequest.PreAuthenticate = true;
+
+					// Define the HTTP method.
+					httpMkColRequest.Method = @"MKCOL";
+
+					// Retrieve the response.
+					var httpMkColResponse = (HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
+
+					// Write the response status to the console.
+					Console.WriteLine();
+					Console.WriteLine($"Создание папки \"{file.GetRemoteDirectoryPath()}\": {httpMkColResponse.StatusDescription}");
+
+					if (httpMkColResponse.StatusCode == HttpStatusCode.Created && file.Data.Length > 0)
+						await Put(file);
 				}
-			}
+				catch (Exception ex)
+				{
+					if (!ex.Message.Contains("405"))
+					{
+						throw;
+					}
+				}
 		}
 
 		/// <summary>
@@ -157,37 +151,35 @@ namespace Uploader
 		/// <param name="remoteDirectoryPath">Дочерняя директория</param>
 		public async Task MKCOL(string url, string remoteDirectoryPath)
 		{
-			try
-			{
-				// Create an HTTP request for the URL.
-				HttpWebRequest httpMkColRequest =
-					(HttpWebRequest)WebRequest.Create(url + remoteDirectoryPath);
-
-				// Set up new credentials.
-				httpMkColRequest.Credentials =
-					new NetworkCredential(Program.UserName, Program.Password);
-
-				// Pre-authenticate the request.
-				httpMkColRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
-				httpMkColRequest.Method = @"MKCOL";
-
-				// Retrieve the response.
-				HttpWebResponse httpMkColResponse =
-					(HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
-
-				// Write the response status to the console.
-				Console.WriteLine();
-				Console.WriteLine($"Создание папки \"{url.Remove(0, ServerUrl.Length) + remoteDirectoryPath}\": {httpMkColResponse.StatusDescription}");
-			}
-			catch (Exception ex)
-			{
-				if (!ex.Message.Contains("405"))
+			if (!string.IsNullOrEmpty(url) && !string.IsNullOrEmpty(remoteDirectoryPath))
+				try
 				{
-					throw;
+					// Create an HTTP request for the URL.
+					var httpMkColRequest = (HttpWebRequest)WebRequest.Create(url + remoteDirectoryPath);
+
+					// Set up new credentials.
+					httpMkColRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
+
+					// Pre-authenticate the request.
+					httpMkColRequest.PreAuthenticate = true;
+
+					// Define the HTTP method.
+					httpMkColRequest.Method = @"MKCOL";
+
+					// Retrieve the response.
+					var httpMkColResponse = (HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
+
+					// Write the response status to the console.
+					Console.WriteLine();
+					Console.WriteLine($"Создание папки \"{url.Remove(0, ServerUrl.Length) + remoteDirectoryPath}\": {httpMkColResponse.StatusDescription}");
 				}
-			}
+				catch (Exception ex)
+				{
+					if (!ex.Message.Contains("405"))
+					{
+						throw;
+					}
+				}
 		}
 	}
 }
