@@ -7,7 +7,10 @@ namespace Uploader
 {
 	class WebDavProvider
 	{
-		private string ServerUrl { get; }		// Адрес удаленного хранилища
+		/// <summary>
+		/// Адрес удаленного хранилища
+		/// </summary>
+		private string ServerUrl { get; }
 
 		public WebDavProvider(string serverUrl)
 		{
@@ -46,12 +49,10 @@ namespace Uploader
 			try
 			{
 				// Create an HTTP request for the URL.
-				HttpWebRequest httpPutRequest =
-					(HttpWebRequest) WebRequest.Create(ServerUrl + file.GetRemotePath());
+				HttpWebRequest httpPutRequest = (HttpWebRequest) WebRequest.Create(ServerUrl + file.GetRemotePath());
 
 				// Set up new credentials.
-				httpPutRequest.Credentials =
-					new NetworkCredential(Program.UserName, Program.Password);
+				httpPutRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
 
 				// Pre-authenticate the request.
 				httpPutRequest.PreAuthenticate = true;

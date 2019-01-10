@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace Uploader
@@ -12,25 +11,26 @@ namespace Uploader
 		/// Логин на NextCloud
 		/// </summary>
 		public static string UserName = "varga";    // TODO: Очистить
-
 		/// <summary>
 		/// Пароль от аккаунта на NextCloud
 		/// </summary>
 		public static string Password = "qiz2Zs";	// TODO: Очистить
-
+		/// <summary>
+		/// Сущности
+		/// </summary>
 		private static readonly string[] Entities = {"Account", "Contact", "Contract"};
+		/// <summary>
+		/// Список файлов
+		/// </summary>
 		static List<File> files = new List<File>();
-
 		/// <summary>
 		/// Адрес удаленного хранилища
 		/// </summary>
 		private const string ServerUrl = "https://cloud.rozetka.ua/remote.php/webdav/";
-
 		/// <summary>
 		/// Имя сервера базы
 		/// </summary>
 		private const string DbServerName = "crm-dev";  // TODO: Заменить
-
 		/// <summary>
 		/// Имя базы
 		/// </summary>
@@ -38,6 +38,9 @@ namespace Uploader
 
 		private const string Top = "top(5)";	// TODO: Убрать в проде
 
+		/// <summary>
+		/// Провайдер WebDav
+		/// </summary>
 		private static WebDavProvider _webDavProvider;
 
 		static async Task Main(string[] args)
@@ -67,7 +70,7 @@ namespace Uploader
 							{
 								while (reader.Read())
 								{
-									await FillFileList(entity, reader);
+									FillFileList(entity, reader);
 								}
 							}
 					}
@@ -75,7 +78,6 @@ namespace Uploader
 					var result = Parallel.ForEach(files,
 						async (file) => await _webDavProvider.Put(file));
 					Console.WriteLine($"Status: {result.IsCompleted}");
-
 
 				}
 				catch (Exception ex)
@@ -135,7 +137,7 @@ namespace Uploader
 		/// <param name="entity">Название сущности</param>
 		/// <param name="reader">SqlDataReader</param>
 		/// <returns></returns>
-		private static async Task FillFileList(string entity, SqlDataReader reader)
+		private static void FillFileList(string entity, SqlDataReader reader)
 		{
 			string entityId = reader.GetValue(0).ToString();
 			string fileId = reader.GetValue(1).ToString();
@@ -146,16 +148,19 @@ namespace Uploader
 
 			List<string> directoryNameList = SplitDirectoryName(directoryName);
 
-
-			if (directoryNameList.Count > 0)
-				await _webDavProvider.CreateAdditionalDirectories(directoryNameList); //TODO: Вынести
-
-			if (string.IsNullOrEmpty(directoryName))
-			{
-				Console.WriteLine("Сохраняем в основной папке.");
-			}
-
 			files.Add(new File($"{entity}File", entityId, fileId, fileVersion, fileData, directoryNameList));
+		}
+
+		/// <summary>
+		/// Создает нужные для помещения файла директории
+		/// </summary>
+		/// <param name="file">Помещаемый файл</param>
+		private static async void CreateDirectories(File file)
+		{
+			if (file != null && file.DirectoryNames.Count > 0)
+			{
+				await _webDavProvider.CreateAdditionalDirectories(file.DirectoryNames);
+			}
 		}
 
 		/// <summary>
