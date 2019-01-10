@@ -122,9 +122,9 @@ namespace Uploader
 		{
 			string cmdSqlCommand = "";
 			if (entity.Equals("Account") || entity.Equals("Contact"))
-				cmdSqlCommand = $"SELECT {Top} f.{entity}Id, f.Id, f.Version, f.Data from [dbo].[{entity}File] f"; // TODO: поменять на выбор всех файлов
+				cmdSqlCommand = $"SELECT {Top} f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data from [dbo].[{entity}File] f"; // TODO: поменять на выбор всех файлов
 			if (entity.Equals("Contract"))
-				cmdSqlCommand = $"SELECT {Top} f.{entity}Id, f.Id, fv.PTVersion, fv.PTData from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv " +
+				cmdSqlCommand = $"SELECT {Top} f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv " +
 					"WHERE fv.PTFile = f.Id"; // TODO: поменять на выбор всех файлов
 
 			return connection.Query<File>(cmdSqlCommand).ToList();

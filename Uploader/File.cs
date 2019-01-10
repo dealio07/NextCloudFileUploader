@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Uploader
@@ -12,12 +13,11 @@ namespace Uploader
 		public byte[] Data { get; set; }
 		public List<string> DirectoryNames { get; }
 
-		public File(string entity, string entityId, string fileId, string version, byte[] data)
+		public File(Guid entityId, Guid fileId, Int32 version, Byte[] data)
 		{
-			Entity = entity;
-			EntityId = entityId;
-			FileId = fileId;
-			Version = version;
+			EntityId = entityId.ToString();
+			FileId = fileId.ToString();
+			Version = version.ToString();
 			Data = data;
 			DirectoryNames = SplitDirectoryName(GetRemoteDirectoryPath());
 		}
@@ -40,12 +40,14 @@ namespace Uploader
 		private List<string> SplitDirectoryName(string directoryName)
 		{
 			var directoryNameList = new List<string>();
-			if (!string.IsNullOrEmpty(directoryName) && directoryName.Contains("/"))
+			if (string.IsNullOrEmpty(directoryName)) return directoryNameList;
+			if (directoryName.Contains("/"))
 			{
 				var arr = directoryName.Split('/');
 				foreach (var str in arr)
 				{
-					if (str.Contains("\\") && !string.IsNullOrEmpty(str) && !string.IsNullOrWhiteSpace(str))
+					if (string.IsNullOrEmpty(str) || string.IsNullOrWhiteSpace(str)) continue;
+					if (str.Contains("\\"))
 					{
 						var arr1 = directoryName.Split('\\');
 						directoryNameList.AddRange(arr1.Where(str1 => !string.IsNullOrEmpty(str1) && !string.IsNullOrWhiteSpace(str1)));
@@ -53,7 +55,7 @@ namespace Uploader
 					else directoryNameList.Add(str);
 				}
 			}
-			else if (!string.IsNullOrEmpty(directoryName) && directoryName.Contains("\\"))
+			else if (directoryName.Contains("\\"))
 			{
 				var arr = directoryName.Split('\\');
 				directoryNameList.AddRange(arr.Where(str => !string.IsNullOrEmpty(str) && !string.IsNullOrWhiteSpace(str)));
