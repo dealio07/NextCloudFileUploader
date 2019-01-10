@@ -13,8 +13,9 @@ namespace Uploader
 		public byte[] Data { get; set; }
 		public List<string> DirectoryNames { get; }
 
-		public File(Guid entityId, Guid fileId, Int32 version, Byte[] data)
+		public File(string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{
+			Entity = entity; 
 			EntityId = entityId.ToString();
 			FileId = fileId.ToString();
 			Version = version.ToString();
@@ -62,6 +63,11 @@ namespace Uploader
 			}
 
 			return directoryNameList;
+		}
+
+		public override string ToString()
+		{
+			return $"{Entity}: {EntityId},\nFileId: {FileId},\nVersion: {Version},\nData: {Data?.Length}";
 		}
 	}
 }

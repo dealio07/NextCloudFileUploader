@@ -7,6 +7,8 @@ namespace Uploader
 {
 	class WebDavProvider
 	{
+		private const int WaitTime = 500;
+
 		/// <summary>
 		/// Адрес удаленного хранилища
 		/// </summary>
@@ -31,7 +33,6 @@ namespace Uploader
 				if (!remoteDirectoryPath.Contains(directoryName))
 					remoteDirectoryPath += directoryName + "/";
 			}
-
 			return remoteDirectoryPath;
 		}
 
@@ -69,37 +70,16 @@ namespace Uploader
 					}
 
 					// Retrieve the response.
-					var httpPutResponse = (HttpWebResponse)(await httpPutRequest.GetResponseAsync());
-
-					if (httpPutResponse != null)
-					{
-						// Write the response status to the console.
-						Console.WriteLine($"Загрузка файла {file.GetRemotePath()}: {httpPutResponse.StatusDescription}");
-					}
+					var result = await httpPutRequest.GetResponseAsync();
+					result.Close();
 				}
 				catch (Exception ex)
 				{
 					if (!ex.Message.Contains("405"))
 					{
-						if (!ex.Message.Contains("404"))
-						{
-							Console.WriteLine();
-							Console.WriteLine($"Ошибка: {ex.Message}");
-						}
-						else
-							Console.WriteLine("Конечная папка не найдена. Создаем папку");
-					}
-
-					if (ex.Message.Contains("404"))
-					{
-						if (file.DirectoryNames.Count > 0)
-						{
-							await CreateAdditionalDirectories(file.DirectoryNames);
-						}
-						else
-						{
-							await MKCOL(file);
-						}
+						Console.WriteLine(!ex.Message.Contains("404")
+							? $"Ошибка: {ex.Message}"
+							: "Конечная папка не найдена.");
 					}
 				}
 		}
@@ -126,11 +106,9 @@ namespace Uploader
 					httpMkColRequest.Method = @"MKCOL";
 
 					// Retrieve the response.
-					var httpMkColResponse = (HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
-
-					// Write the response status to the console.
-					Console.WriteLine();
-					Console.WriteLine($"Создание папки \"{file.GetRemoteDirectoryPath()}\": {httpMkColResponse.StatusDescription}");
+					var task = httpMkColRequest.GetResponseAsync();
+					//task.Wait(WaitTime);
+					var httpMkColResponse = (HttpWebResponse)(await task);
 
 					if (httpMkColResponse.StatusCode == HttpStatusCode.Created && file.Data.Length > 0)
 						await Put(file);
@@ -151,35 +129,33 @@ namespace Uploader
 		/// <param name="remoteDirectoryPath">Дочерняя директория</param>
 		public async Task MKCOL(string url, string remoteDirectoryPath)
 		{
-			if (!string.IsNullOrEmpty(url) && !string.IsNullOrEmpty(remoteDirectoryPath))
-				try
+			if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(remoteDirectoryPath)) return;
+			try
+			{
+				// Create an HTTP request for the URL.
+				var httpMkColRequest = (HttpWebRequest)WebRequest.Create(url + remoteDirectoryPath);
+
+				// Set up new credentials.
+				httpMkColRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
+
+				// Pre-authenticate the request.
+				httpMkColRequest.PreAuthenticate = true;
+
+				// Define the HTTP method.
+				httpMkColRequest.Method = @"MKCOL";
+
+				// Retrieve the response.
+				var task = httpMkColRequest.GetResponseAsync();
+				task.Wait();
+				await task;
+			}
+			catch (Exception ex)
+			{
+				if (!ex.Message.Contains("405"))
 				{
-					// Create an HTTP request for the URL.
-					var httpMkColRequest = (HttpWebRequest)WebRequest.Create(url + remoteDirectoryPath);
-
-					// Set up new credentials.
-					httpMkColRequest.Credentials = new NetworkCredential(Program.UserName, Program.Password);
-
-					// Pre-authenticate the request.
-					httpMkColRequest.PreAuthenticate = true;
-
-					// Define the HTTP method.
-					httpMkColRequest.Method = @"MKCOL";
-
-					// Retrieve the response.
-					var httpMkColResponse = (HttpWebResponse)(await httpMkColRequest.GetResponseAsync());
-
-					// Write the response status to the console.
-					Console.WriteLine();
-					Console.WriteLine($"Создание папки \"{url.Remove(0, ServerUrl.Length) + remoteDirectoryPath}\": {httpMkColResponse.StatusDescription}");
+					throw;
 				}
-				catch (Exception ex)
-				{
-					if (!ex.Message.Contains("405"))
-					{
-						throw;
-					}
-				}
+			}
 		}
 	}
 }
