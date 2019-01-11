@@ -29,7 +29,7 @@ namespace Uploader
 		/// Создает дополнительные директории из списка директорий
 		/// </summary>
 		/// <param name="folderNameList">Список директорий</param>
-		public async Task<string> CreateFolders(List<string> folderNameList)
+		public async Task<string> CreateFolders(IEnumerable<string> folderNameList)
 		{
 			var remoteFolderPath = "";
 			if (folderNameList == null) return remoteFolderPath;

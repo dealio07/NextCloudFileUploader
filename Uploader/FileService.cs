@@ -20,26 +20,22 @@ namespace Uploader
 		/// Выгружает файлы в хранилище
 		/// </summary>
 		/// <returns></returns>
-		public async Task UploadFiles(List<File> fileList)
+		public async Task UploadFiles(IEnumerable<File> fileList)
 		{
 			long current = 0;
-			Parallel.ForEach(fileList, async (file, state, s) =>
+			var enumerable = fileList.ToList();
+			Parallel.ForEach(enumerable, async (file, state, s) =>
 			{
 				try
 				{
 					await _webDavProvider.Put(file);
-					Program.ShowPercentProgress("3. Загружаем файлы", current, fileList.Count);
+					Utils.ShowPercentProgress("3. Загружаем файлы", current, enumerable.Count);
 				}
 				finally
 				{
 					Interlocked.Increment(ref current);
 				}
 			});
-			/*foreach (var file in _fileList)
-			{
-				await _webDavProvider.Put(file);
-				ShowPercentProgress("3. Загружаем файлы", _fileList.IndexOf(file), _fileList.Count);
-			}*/
 		}
 
 		/// <summary>

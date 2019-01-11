@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,13 +19,14 @@ namespace Uploader
 		/// Создает директории для файлов
 		/// </summary>
 		/// <returns></returns>
-		public async Task CreateFolders(List<File> fileList)
+		public async Task CreateFolders(IEnumerable<File> fileList)
 		{
 			Console.WriteLine("2. Создаем папки");
-			foreach (var file in fileList)
+			var enumerable = fileList.ToList();
+			foreach (var file in enumerable)
 			{
 				await _webDavProvider.CreateFolders(file.FolderNames);
-				Program.ShowPercentProgress($"Создаём папку: {file.GetRemoteFolderPath()}", fileList.IndexOf(file), fileList.Count);
+				Utils.ShowPercentProgress($"Создаём папку: {file.GetRemoteFolderPath()}", enumerable.IndexOf(file), enumerable.Count);
 			}
 		}
 
@@ -32,25 +34,27 @@ namespace Uploader
 		/// Создает директории для файлов из списка
 		/// </summary>
 		/// <returns></returns>
-		public async Task CreateFoldersFromList(List<string> folderList)
+		public async Task CreateFoldersFromList(IEnumerable<string> folderList)
 		{
 			Console.WriteLine("2. Создаем папки");
-			await _webDavProvider.CreateFolders(folderList);
+			var enumerable = folderList.ToList();
+			await _webDavProvider.CreateFolders(enumerable);
 		}
 
 		/// <summary>
 		/// Создает директории для файлов параллельно
 		/// </summary>
 		/// <returns></returns>
-		public async Task CreateFoldersInParallel(List<File> fileList)
+		public async Task CreateFoldersInParallel(IEnumerable<File> fileList)
 		{
 			long current = 0;
-			Parallel.ForEach(fileList, async (file, state, s) =>
+			var enumerable = fileList.ToList();
+			Parallel.ForEach(enumerable, async (file, state, s) =>
 			{
 				try
 				{
 					await _webDavProvider.CreateFolders(file?.FolderNames);
-					Program.ShowPercentProgress("2. Создаём папки", current, fileList.Count);
+					Utils.ShowPercentProgress("2. Создаём папки", current, enumerable.Count);
 				}
 				finally
 				{
