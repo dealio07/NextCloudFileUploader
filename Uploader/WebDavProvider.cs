@@ -60,6 +60,8 @@ namespace Uploader
 					// Specify that overwriting the destination is allowed.
 					httpPutRequest.Headers.Add(@"Overwrite", @"T");
 
+					httpPutRequest.Headers.Add(@"Keep-Alive", @"True");
+
 					// Specify the content length.
 					httpPutRequest.ContentLength = file.Data.Length;
 
@@ -70,16 +72,15 @@ namespace Uploader
 					}
 
 					// Retrieve the response.
-					var result = await httpPutRequest.GetResponseAsync();
-					result.Close();
+					httpPutRequest.GetResponseAsync().Wait(WaitTime);
 				}
 				catch (Exception ex)
 				{
 					if (!ex.Message.Contains("405"))
 					{
-						Console.WriteLine(!ex.Message.Contains("404")
-							? $"Ошибка: {ex.Message}"
-							: "Конечная папка не найдена.");
+						Console.WriteLine($"Ошибка: {ex.Message}");
+						Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
+						throw;
 					}
 				}
 		}
@@ -145,9 +146,7 @@ namespace Uploader
 				httpMkColRequest.Method = @"MKCOL";
 
 				// Retrieve the response.
-				var task = httpMkColRequest.GetResponseAsync();
-				task.Wait();
-				await task;
+				httpMkColRequest.GetResponseAsync().Wait(WaitTime);
 			}
 			catch (Exception ex)
 			{

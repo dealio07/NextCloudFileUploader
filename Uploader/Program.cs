@@ -45,7 +45,7 @@ namespace Uploader
 		private const string ConnectionString = "Data Source=" + DbServerName + ";Initial Catalog=" + InitialCatalog +
 		                                        ";Trusted_Connection=True;";
 
-		private const string Top = "top(50)";   // TODO: Убрать в проде
+		private const string Top = "top(20)";   // TODO: Убрать в проде
 
 		/// <summary>
 		/// Провайдер WebDav
@@ -54,18 +54,14 @@ namespace Uploader
 
 		private static void Main(string[] args)
 		{
-			var watch = System.Diagnostics.Stopwatch.StartNew(); // TODO: Убрать
+			var watch = System.Diagnostics.Stopwatch.StartNew();
 			_webDavProvider = new WebDavProvider(ServerUrl);
 
 			if (string.IsNullOrEmpty(UserName))
-			{
 				AskUserForName();
-			}
 
 			if (string.IsNullOrEmpty(Password))
-			{
 				AskUserForPassword();
-			}
 
 			using (IDbConnection connection = new SqlConnection(ConnectionString))
 			{
@@ -78,43 +74,32 @@ namespace Uploader
 					}
 					Console.WriteLine("1. Файлы получены");
 
-					Task.Factory.ContinueWhenAll(new[] { CreateDirectories() }, tasks =>
-					{
-						watch.Stop();
-						Console.WriteLine($"2. Папки созданы за: { watch.ElapsedMilliseconds / 1000 }сек");
-						watch.Restart();
-					})
-						.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] { UploadFiles() }, tasks =>
-					{
-						watch.Stop();
-						Console.WriteLine($"3. Файлы загружены за: { watch.ElapsedMilliseconds / 1000 }сек");
-					}));
+					Task.Factory.ContinueWhenAll(new[] {CreateDirectoriesInParallel()}, tasks =>
+						{
+							watch.Stop();
+							Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds / 1000} сек");
+							watch.Restart();
+						})
+						.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] {UploadFiles()}, tasks =>
+						{
+							watch.Stop();
+						})).ContinueWith(task => Task.Factory.ContinueWhenAll(new[] { new Task(()=>{}) }, tasks =>
+						{
+							//Console.WriteLine($"3. Файлы загружены за {watch.ElapsedMilliseconds / 1000} сек");
+							//Console.WriteLine("Нажмите Enter, чтобы выйти.");
+						}));
 
 				}
 				catch (Exception ex)
 				{
 					Console.WriteLine(ex.Message);
+					throw;
 				}
 				finally
 				{
-					//watch.Stop();
-					//Console.WriteLine($"Выполнено за: {watch.ElapsedMilliseconds / 1000}сек");
+					Console.WriteLine("Дождитесь полной загрузки файлов.");
 					Console.ReadLine();
 				}
-			}
-		}
-
-		/// <summary>
-		/// Выгружает файлы в хранилище
-		/// </summary>
-		/// <returns></returns>
-		private static async Task UploadFiles()
-		{
-			Console.WriteLine("3. Загружаем файлы");
-			foreach (var file in _files)
-			{
-				await _webDavProvider.Put(file);
-				ShowPercentProgress($"Загружаем файл: {file.GetRemotePath()}", _files.IndexOf(file), _files.Count);
 			}
 		}
 
@@ -133,20 +118,66 @@ namespace Uploader
 		}
 
 		/// <summary>
+		/// Создает директории для файлов
+		/// </summary>
+		/// <returns></returns>
+		private static async Task CreateDirectoriesInParallel()
+		{
+			long current = 0;
+			Parallel.ForEach(_files, async (file, state, s) =>
+			{
+				try
+				{
+					await _webDavProvider.CreateAdditionalDirectories(file.DirectoryNames);
+					ShowPercentProgress("2. Создаём папки", current, _files.Count);
+				}
+				finally
+				{
+					Interlocked.Increment(ref current);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Выгружает файлы в хранилище
+		/// </summary>
+		/// <returns></returns>
+		private static async Task UploadFiles()
+		{
+			long current = 0;
+			Parallel.ForEach(_files, async (file, state, s) =>
+			{
+				try
+				{
+					await _webDavProvider.Put(file);
+					ShowPercentProgress("3. Загружаем файлы", current, _files.Count);
+				}
+				finally
+				{
+					Interlocked.Increment(ref current);
+				}
+			});
+			/*foreach (var file in _files)
+			{
+				await _webDavProvider.Put(file);
+				ShowPercentProgress("3. Загружаем файлы", _files.IndexOf(file), _files.Count);
+			}*/
+		}
+
+		/// <summary>
 		/// Показывает прогресс выполняемого процесса
 		/// </summary>
 		/// <param name="message">Отображаемое сообщение</param>
 		/// <param name="processed">Обработано объектов</param>
 		/// <param name="total">Общее количество объектов</param>
-		static void ShowPercentProgress(string message, long processed, long total)
+		private static void ShowPercentProgress(string message, long processed, long total)
 		{
-
 			var percent = (100 * (processed + 1)) / total;
-			Console.Write($"\r{message} {percent : #0.#}% готово");
+			if (processed == total - 1 && percent < 100)
+				percent = 100;
+			Console.Write($"\r{message}: {percent : ##0.#}% выполнено");
 			if (processed >= total - 1)
-			{
-				Console.WriteLine(Environment.NewLine);
-			}
+				Console.Write(Environment.NewLine);
 		}
 
 		/// <summary>
