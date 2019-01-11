@@ -17,10 +17,10 @@ namespace Uploader
 		}
 
 		/// <summary>
-		/// Выгружает файлы в хранилище
+		/// Выгружает файлы в хранилище параллельно
 		/// </summary>
 		/// <returns></returns>
-		public async Task UploadFiles(IEnumerable<File> fileList)
+		public async Task UploadFilesInParallel(IEnumerable<File> fileList)
 		{
 			long current = 0;
 			var enumerable = fileList.ToList();
@@ -36,6 +36,20 @@ namespace Uploader
 					Interlocked.Increment(ref current);
 				}
 			});
+		}
+
+		/// <summary>
+		/// Выгружает файлы в хранилище
+		/// </summary>
+		/// <returns></returns>
+		public async Task UploadFiles(IEnumerable<File> fileList)
+		{
+			var enumerable = fileList.ToList();
+			foreach (var file in enumerable)
+			{
+				await _webDavProvider.Put(file);
+				Utils.ShowPercentProgress("3. Загружаем файлы", enumerable.IndexOf(file), enumerable.Count);
+			}
 		}
 
 		/// <summary>

@@ -72,7 +72,7 @@ namespace Uploader
 		/// </summary>
 		private static FileService _fileService;
 
-		public const string Top = "top(10)";   // TODO: Убрать в проде
+		public const string Top = "top(3)";   // TODO: Убрать в проде
 
 		private static void Main(string[] args)
 		{
@@ -116,13 +116,13 @@ namespace Uploader
 		/// <param name="watch">Часы для отслеживания потраченного времени</param>
 		private static void CreateFoldersAndUploadFiles(Stopwatch watch)
 		{
-			Task.Factory.ContinueWhenAll(new[] {_folderService.CreateFoldersInParallel(_fileList)}, tasks =>
-				{
-					watch.Stop();
-					Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds / 1000} сек");
-					watch.Restart();
-				})
-				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] {_fileService.UploadFiles(_fileList)}, tasks => { watch.Stop(); }))
+			Task.Factory.ContinueWhenAll(new[] { _folderService.CreateFoldersInParallel(_fileList) }, tasks =>
+				  {
+					  watch.Stop();
+					  Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds / 1000} сек");
+					  watch.Restart();
+				  })
+				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] { _fileService.UploadFilesInParallel(_fileList) }, tasks => { watch.Stop(); }))
 				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[]
 				{
 					new Task(() =>

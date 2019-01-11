@@ -21,12 +21,11 @@ namespace Uploader
 		/// <returns></returns>
 		public async Task CreateFolders(IEnumerable<File> fileList)
 		{
-			Console.WriteLine("2. Создаем папки");
 			var enumerable = fileList.ToList();
 			foreach (var file in enumerable)
 			{
 				await _webDavProvider.CreateFolders(file.FolderNames);
-				Utils.ShowPercentProgress($"Создаём папку: {file.GetRemoteFolderPath()}", enumerable.IndexOf(file), enumerable.Count);
+				Utils.ShowPercentProgress("2. Создаём папки", enumerable.IndexOf(file), enumerable.Count);
 			}
 		}
 
