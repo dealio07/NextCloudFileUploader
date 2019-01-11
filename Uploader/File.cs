@@ -11,7 +11,7 @@ namespace Uploader
 		public string FileId { get; set; }
 		public string Version { get; set; }
 		public byte[] Data { get; set; }
-		public List<string> DirectoryNames { get; }
+		public List<string> FolderNames { get; }
 
 		public File(string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{
@@ -20,7 +20,7 @@ namespace Uploader
 			FileId = fileId.ToString();
 			Version = version.ToString();
 			Data = data;
-			DirectoryNames = SplitDirectoryName(GetRemoteDirectoryPath());
+			FolderNames = SplitFolderName(GetRemoteFolderPath());
 		}
 
 		public string GetRemotePath()
@@ -28,7 +28,7 @@ namespace Uploader
 			return $"{Entity}/{EntityId}/{FileId}/{Version}";
 		}
 
-		public string GetRemoteDirectoryPath()
+		public string GetRemoteFolderPath()
 		{
 			return $"{Entity}/{EntityId}/{FileId}/";
 		}
@@ -36,33 +36,33 @@ namespace Uploader
 		/// <summary>
 		/// Разделяет имя директории, если оно содержит несколько имен разделённых "/" или "\"
 		/// </summary>
-		/// <param name="directoryName">Имя нужной директории</param>
+		/// <param name="folderName">Имя нужной директории</param>
 		/// <returns>Возвращает список названий папок</returns>
-		private List<string> SplitDirectoryName(string directoryName)
+		private List<string> SplitFolderName(string folderName)
 		{
-			var directoryNameList = new List<string>();
-			if (string.IsNullOrEmpty(directoryName)) return directoryNameList;
-			if (directoryName.Contains("/"))
+			var folderNameList = new List<string>();
+			if (string.IsNullOrEmpty(folderName)) return folderNameList;
+			if (folderName.Contains("/"))
 			{
-				var arr = directoryName.Split('/');
+				var arr = folderName.Split('/');
 				foreach (var str in arr)
 				{
 					if (string.IsNullOrEmpty(str) || string.IsNullOrWhiteSpace(str)) continue;
 					if (str.Contains("\\"))
 					{
-						var arr1 = directoryName.Split('\\');
-						directoryNameList.AddRange(arr1.Where(str1 => !string.IsNullOrEmpty(str1) && !string.IsNullOrWhiteSpace(str1)));
+						var arr1 = folderName.Split('\\');
+						folderNameList.AddRange(arr1.Where(str1 => !string.IsNullOrEmpty(str1) && !string.IsNullOrWhiteSpace(str1)));
 					}
-					else directoryNameList.Add(str);
+					else folderNameList.Add(str);
 				}
 			}
-			else if (directoryName.Contains("\\"))
+			else if (folderName.Contains("\\"))
 			{
-				var arr = directoryName.Split('\\');
-				directoryNameList.AddRange(arr.Where(str => !string.IsNullOrEmpty(str) && !string.IsNullOrWhiteSpace(str)));
+				var arr = folderName.Split('\\');
+				folderNameList.AddRange(arr.Where(str => !string.IsNullOrEmpty(str) && !string.IsNullOrWhiteSpace(str)));
 			}
 
-			return directoryNameList;
+			return folderNameList;
 		}
 
 		public override string ToString()

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,16 +10,16 @@ using Dapper;
 
 namespace Uploader
 {
-	class Program
+	public class Program
 	{
 		/// <summary>
 		/// Логин на NextCloud
 		/// </summary>
-		public static string UserName = "varga";    // TODO: Очистить
+		private static string _userName = "varga";    // TODO: Очистить
 		/// <summary>
 		/// Пароль от аккаунта на NextCloud
 		/// </summary>
-		public static string Password = "qiz2Zs";	// TODO: Очистить
+		private static string _password = "qiz2Zs";	// TODO: Очистить
 		/// <summary>
 		/// Сущности
 		/// </summary>
@@ -26,7 +27,23 @@ namespace Uploader
 		/// <summary>
 		/// Список файлов
 		/// </summary>
-		static List<File> _files = new List<File>();
+		private static List<File> _fileList = new List<File>();
+		/// <summary>
+		/// Список файлов
+		/// </summary>
+		private static List<string> _folderList = new List<string>();
+		/// <summary>
+		/// Файлы, сгруппированные по сущности
+		/// </summary>
+		private static IEnumerable<IGrouping<string, File>> _groupedByEntity = new List<IGrouping<string, File>>();
+		/// <summary>
+		/// Файлы, сгруппированные по сущности и ID сущности
+		/// </summary>
+		private static IEnumerable<IGrouping<(string Entity, string EntityId), File>> _groupedByEntityAndEntityId = new List<IGrouping<(string Entity, string EntityId), File>>();
+		/// <summary>
+		/// Файлы, сгруппированные по сущности, ID сущности и ID файла
+		/// </summary>
+		private static IEnumerable<IGrouping<(string Entity, string EntityId, string FileId), File>> _groupedByEntityAndEntityIdAndFileId = new List<IGrouping<(string Entity, string EntityId, string FileId), File>>();
 		/// <summary>
 		/// Адрес удаленного хранилища
 		/// </summary>
@@ -44,51 +61,49 @@ namespace Uploader
 		/// </summary>
 		private const string ConnectionString = "Data Source=" + DbServerName + ";Initial Catalog=" + InitialCatalog +
 		                                        ";Trusted_Connection=True;";
-
-		private const string Top = "top(20)";   // TODO: Убрать в проде
-
 		/// <summary>
 		/// Провайдер WebDav
 		/// </summary>
 		private static WebDavProvider _webDavProvider;
+		/// <summary>
+		/// Сервис работы с папками
+		/// </summary>
+		private static FolderService _folderService;
+		/// <summary>
+		/// Сервис работы с файлами
+		/// </summary>
+		private static FileService _fileService;
+
+		public const string Top = "top(10)";   // TODO: Убрать в проде
 
 		private static void Main(string[] args)
 		{
-			var watch = System.Diagnostics.Stopwatch.StartNew();
-			_webDavProvider = new WebDavProvider(ServerUrl);
+			var watch = Stopwatch.StartNew();
 
-			if (string.IsNullOrEmpty(UserName))
+			_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
+			_folderService = new FolderService(_webDavProvider);
+			_fileService = new FileService(_webDavProvider);
+
+			if (string.IsNullOrEmpty(_userName))
 				AskUserForName();
 
-			if (string.IsNullOrEmpty(Password))
+			if (string.IsNullOrEmpty(_password))
 				AskUserForPassword();
 
 			using (IDbConnection connection = new SqlConnection(ConnectionString))
 			{
 				try
 				{
-					Console.WriteLine("1. Получаем файлы");
-					foreach (var entity in Entities)
+					FillFileList(connection);
+					GroupFiles();
+					FillFolderList();
+
+					/*foreach (var s in _folderList)
 					{
-						_files.AddRange(GetFiles(entity, connection));
-					}
-					Console.WriteLine("1. Файлы получены");
+						Console.WriteLine(s);
+					}*/
 
-					Task.Factory.ContinueWhenAll(new[] {CreateDirectoriesInParallel()}, tasks =>
-						{
-							watch.Stop();
-							Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds / 1000} сек");
-							watch.Restart();
-						})
-						.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] {UploadFiles()}, tasks =>
-						{
-							watch.Stop();
-						})).ContinueWith(task => Task.Factory.ContinueWhenAll(new[] { new Task(()=>{}) }, tasks =>
-						{
-							//Console.WriteLine($"3. Файлы загружены за {watch.ElapsedMilliseconds / 1000} сек");
-							//Console.WriteLine("Нажмите Enter, чтобы выйти.");
-						}));
-
+					CreateFoldersAndUploadFiles(watch);
 				}
 				catch (Exception ex)
 				{
@@ -104,64 +119,63 @@ namespace Uploader
 		}
 
 		/// <summary>
-		/// Создает директории для файлов
+		/// Создает папки и загружает в них файлы
 		/// </summary>
-		/// <returns></returns>
-		private static async Task CreateDirectories()
+		/// <param name="watch">Часы для отслеживания потраченного времени</param>
+		private static void CreateFoldersAndUploadFiles(Stopwatch watch)
 		{
-			Console.WriteLine("2. Создаем папки");
-			foreach (var file in _files)
+			Task.Factory.ContinueWhenAll(new[] {_folderService.CreateFoldersInParallel(_fileList)}, tasks =>
+				{
+					watch.Stop();
+					Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds / 1000} сек");
+					watch.Restart();
+				})
+				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] {_fileService.UploadFiles(_fileList)}, tasks => { watch.Stop(); }))
+				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[]
+				{
+					new Task(() =>
+					{
+						Console.WriteLine($"3. Файлы загружены за {watch.ElapsedMilliseconds / 1000} сек");
+						Console.WriteLine("Нажмите Enter, чтобы выйти.");
+					})
+				}, tasks => { }));
+		}
+
+		/// <summary>
+		/// Группирует файлы по сущности, ID сущности и ID файла
+		/// </summary>
+		private static void GroupFiles()
+		{
+			_groupedByEntity = _fileList.GroupBy(file => file.Entity);
+			_groupedByEntityAndEntityId = _fileList.GroupBy(file => (file.Entity, file.EntityId));
+			_groupedByEntityAndEntityIdAndFileId = _fileList.GroupBy(file => (file.Entity, file.EntityId, file.FileId));
+		}
+
+		/// <summary>
+		/// Заполняет список директорий
+		/// </summary>
+		private static void FillFolderList()
+		{
+			_folderList = _groupedByEntity.Select(grouped => grouped.Key).ToList();
+			_folderList.AddRange(
+				_groupedByEntityAndEntityId.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}"));
+			_folderList.AddRange(_groupedByEntityAndEntityIdAndFileId.Select(grouped =>
+				$"{grouped.Key.Entity}/{grouped.Key.EntityId}/{grouped.Key.FileId}"));
+		}
+
+		/// <summary>
+		/// Заполняет список файлов
+		/// </summary>
+		/// <param name="connection">Соединение с базой</param>
+		private static void FillFileList(IDbConnection connection)
+		{
+			Console.WriteLine("1. Получаем файлы из базы");
+			foreach (var entity in Entities)
 			{
-				await _webDavProvider.CreateAdditionalDirectories(file.DirectoryNames);
-				ShowPercentProgress($"Создаём папку: {file.GetRemoteDirectoryPath()}", _files.IndexOf(file), _files.Count);
+				_fileList.AddRange(_fileService.GetFilesFromDb(entity, connection));
 			}
-		}
 
-		/// <summary>
-		/// Создает директории для файлов
-		/// </summary>
-		/// <returns></returns>
-		private static async Task CreateDirectoriesInParallel()
-		{
-			long current = 0;
-			Parallel.ForEach(_files, async (file, state, s) =>
-			{
-				try
-				{
-					await _webDavProvider.CreateAdditionalDirectories(file.DirectoryNames);
-					ShowPercentProgress("2. Создаём папки", current, _files.Count);
-				}
-				finally
-				{
-					Interlocked.Increment(ref current);
-				}
-			});
-		}
-
-		/// <summary>
-		/// Выгружает файлы в хранилище
-		/// </summary>
-		/// <returns></returns>
-		private static async Task UploadFiles()
-		{
-			long current = 0;
-			Parallel.ForEach(_files, async (file, state, s) =>
-			{
-				try
-				{
-					await _webDavProvider.Put(file);
-					ShowPercentProgress("3. Загружаем файлы", current, _files.Count);
-				}
-				finally
-				{
-					Interlocked.Increment(ref current);
-				}
-			});
-			/*foreach (var file in _files)
-			{
-				await _webDavProvider.Put(file);
-				ShowPercentProgress("3. Загружаем файлы", _files.IndexOf(file), _files.Count);
-			}*/
+			Console.WriteLine("1. Файлы получены");
 		}
 
 		/// <summary>
@@ -170,12 +184,12 @@ namespace Uploader
 		/// <param name="message">Отображаемое сообщение</param>
 		/// <param name="processed">Обработано объектов</param>
 		/// <param name="total">Общее количество объектов</param>
-		private static void ShowPercentProgress(string message, long processed, long total)
+		public static void ShowPercentProgress(string message, long processed, long total)
 		{
 			var percent = (100 * (processed + 1)) / total;
-			if (processed == total - 1 && percent < 100)
+			if (processed >= total - 1 && percent < 100)
 				percent = 100;
-			Console.Write($"\r{message}: {percent : ##0.#}% выполнено");
+			Console.Write($"\r{message}: {percent : ##0.#}% выполнено {processed + 1} из {total}");
 			if (processed >= total - 1)
 				Console.Write(Environment.NewLine);
 		}
@@ -186,7 +200,7 @@ namespace Uploader
 		private static void AskUserForName()
 		{
 			Console.WriteLine("Введите логин:");
-			UserName = Console.ReadLine();
+			_userName = Console.ReadLine();
 		}
 
 		/// <summary>
@@ -195,26 +209,7 @@ namespace Uploader
 		private static void AskUserForPassword()
 		{
 			Console.WriteLine("Введите пароль:");
-			Password = ReadAndMaskInputPassword();
-		}
-
-		/// <summary>
-		/// Выполняет запрос в базу
-		/// </summary>
-		/// <param name="entity">Название сущности</param>
-		/// <param name="connection">Соединение с базой</param>
-		/// <returns>Возвращает SqlDataReader</returns>
-		private static IEnumerable<File> GetFiles(string entity, IDbConnection connection)
-		{
-			string cmdSqlCommand = "";
-			if (entity.Equals("Account") || entity.Equals("Contact"))
-				cmdSqlCommand = $"SELECT {Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data from [dbo].[{entity}File] f " +
-					$"WHERE f.{entity}Id is not null and f.Id is not null and f.Data is not null";
-			if (entity.Equals("Contract"))
-				cmdSqlCommand = $"SELECT {Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv " +
-					$"WHERE fv.PTFile = f.Id and f.{entity}Id is not null and f.Id is not null and f.Data is not null";
-
-			return connection.Query<File>(cmdSqlCommand).ToList();
+			_password = ReadAndMaskInputPassword();
 		}
 
 		/// <summary>
