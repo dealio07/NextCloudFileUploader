@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Uploader
@@ -21,7 +22,7 @@ namespace Uploader
 		/// <summary>
 		/// Сущности
 		/// </summary>
-		private static readonly string[] Entities = {"Account", "Contact", "Contract"};
+		private static readonly string[] Entities = {"Account", "Contact", "Contract" };
 		/// <summary>
 		/// Список файлов
 		/// </summary>
@@ -30,18 +31,6 @@ namespace Uploader
 		/// Список файлов
 		/// </summary>
 		private static List<string> _folderList = new List<string>();
-		/// <summary>
-		/// Файлы, сгруппированные по сущности
-		/// </summary>
-		private static IEnumerable<IGrouping<string, File>> _groupedByEntity = new List<IGrouping<string, File>>();
-		/// <summary>
-		/// Файлы, сгруппированные по сущности и ID сущности
-		/// </summary>
-		private static IEnumerable<IGrouping<(string Entity, string EntityId), File>> _groupedByEntityAndEntityId = new List<IGrouping<(string Entity, string EntityId), File>>();
-		/// <summary>
-		/// Файлы, сгруппированные по сущности, ID сущности и ID файла
-		/// </summary>
-		private static IEnumerable<IGrouping<(string Entity, string EntityId, string FileId), File>> _groupedByEntityAndEntityIdAndFileId = new List<IGrouping<(string Entity, string EntityId, string FileId), File>>();
 		/// <summary>
 		/// Адрес удаленного хранилища
 		/// </summary>
@@ -72,7 +61,7 @@ namespace Uploader
 		/// </summary>
 		private static FileService _fileService;
 
-		public const string Top = "top(3)";   // TODO: Убрать в проде
+		public const string Top = "top(5)";   // TODO: Убрать в проде
 
 		private static void Main(string[] args)
 		{
@@ -93,13 +82,13 @@ namespace Uploader
 				try
 				{
 					FillFileList(connection);
-					GroupFiles();
 					FillFolderList();
-					CreateFoldersAndUploadFiles(watch);
+					CreateFoldersAndUploadFilesThroughTaskFactory(watch);
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine(ex.Message);
+					Console.WriteLine($"\nОшибка: {ex.Message}");
+					Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
 					throw;
 				}
 				finally
@@ -114,33 +103,22 @@ namespace Uploader
 		/// Создает папки и загружает в них файлы
 		/// </summary>
 		/// <param name="watch">Часы для отслеживания потраченного времени</param>
-		private static void CreateFoldersAndUploadFiles(Stopwatch watch)
+		private static void CreateFoldersAndUploadFilesThroughTaskFactory(Stopwatch watch)
 		{
-			Task.Factory.ContinueWhenAll(new[] { _folderService.CreateFoldersInParallel(_fileList) }, tasks =>
+			Task.Factory.ContinueWhenAll(new[] { _folderService.CreateFoldersFromGroupedList(_folderList) },
+					tasks =>
 				  {
 					  watch.Stop();
-					  Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds / 1000} сек");
+					  Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds} мс");
 					  watch.Restart();
 				  })
-				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] { _fileService.UploadFilesInParallel(_fileList) }, tasks => { watch.Stop(); }))
-				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[]
-				{
-					new Task(() =>
+				.ContinueWith(task => Task.Factory.ContinueWhenAll(new[] { _fileService.UploadFiles(_fileList) },
+					tasks =>
 					{
-						Console.WriteLine($"3. Файлы загружены за {watch.ElapsedMilliseconds / 1000} сек");
+						watch.Stop();
+						Console.WriteLine($"3. Файлы загружены за {watch.ElapsedMilliseconds} мс");
 						Console.WriteLine("Нажмите Enter, чтобы выйти.");
-					})
-				}, tasks => { }));
-		}
-
-		/// <summary>
-		/// Группирует файлы по сущности, ID сущности и ID файла
-		/// </summary>
-		private static void GroupFiles()
-		{
-			_groupedByEntity = _fileList.GroupBy(file => file.Entity);
-			_groupedByEntityAndEntityId = _fileList.GroupBy(file => (file.Entity, file.EntityId));
-			_groupedByEntityAndEntityIdAndFileId = _fileList.GroupBy(file => (file.Entity, file.EntityId, file.FileId));
+					}));
 		}
 
 		/// <summary>
@@ -148,11 +126,14 @@ namespace Uploader
 		/// </summary>
 		private static void FillFolderList()
 		{
-			_folderList = _groupedByEntity.Select(grouped => grouped.Key).ToList();
-			_folderList.AddRange(
-				_groupedByEntityAndEntityId.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}"));
-			_folderList.AddRange(_groupedByEntityAndEntityIdAndFileId.Select(grouped =>
-				$"{grouped.Key.Entity}/{grouped.Key.EntityId}/{grouped.Key.FileId}"));
+			// По сущности
+			_folderList = _fileList.GroupBy(file => file.Entity).Select(grouped => grouped.Key).ToList();
+			// По сущности и ID сущности
+			_folderList.AddRange(_fileList.GroupBy(file => (file.Entity, file.EntityId))
+				.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}"));
+			// По сущности, ID сущности и ID файла
+			_folderList.AddRange(_fileList.GroupBy(file => (file.Entity, file.EntityId, file.FileId))
+				.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}/{grouped.Key.FileId}"));
 		}
 
 		/// <summary>

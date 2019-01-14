@@ -1,18 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Net;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Uploader
 {
 	public class WebDavProvider
 	{
-		private const int WaitTime = 500;
-
 		/// <summary>
 		/// Адрес удаленного хранилища
 		/// </summary>
-		private string ServerUrl { get; }
+		public string ServerUrl { get; }
 
 		private string UserName;
 
@@ -26,107 +26,54 @@ namespace Uploader
 		}
 
 		/// <summary>
-		/// Создает дополнительные директории из списка директорий
-		/// </summary>
-		/// <param name="folderNameList">Список директорий</param>
-		public async Task<string> CreateFolders(IEnumerable<string> folderNameList)
-		{
-			var remoteFolderPath = "";
-			if (folderNameList == null) return remoteFolderPath;
-			foreach (var folderName in folderNameList)
-			{
-				await MKCOL(ServerUrl + remoteFolderPath, folderName);
-				if (!remoteFolderPath.Contains(folderName))
-					remoteFolderPath += folderName + "/";
-			}
-			return remoteFolderPath;
-		}
-
-		/// <summary>
 		/// Помещает файл в файловое хранилище
 		/// </summary>
 		/// <param name="file">Загружаемый файл</param>
-		public async Task Put(File file)
+		public async Task<bool> Put(File file)
 		{
-			if (file?.Data != null && file.FolderNames?.Count > 0)
-				try
-				{
-					// Create an HTTP request for the URL.
-					var httpPutRequest = (HttpWebRequest)WebRequest.Create(ServerUrl + file.GetRemotePath());
+			if (file?.Data == null || !(file.FolderNames?.Count > 0)) return false;
+			try
+			{
+				// Create an HTTP request for the URL.
+				var httpPutRequest = (HttpWebRequest)WebRequest.Create(ServerUrl + file.GetRemotePath());
 
-					// Set up new credentials.
-					httpPutRequest.Credentials = new NetworkCredential(UserName, Password);
+				// Set up new credentials.
+				httpPutRequest.Credentials = new NetworkCredential(UserName, Password);
 
-					// Pre-authenticate the request.
-					httpPutRequest.PreAuthenticate = true;
+				// Pre-authenticate the request.
+				httpPutRequest.PreAuthenticate = true;
 
-					// Define the HTTP method.
-					httpPutRequest.Method = @"PUT";
+				// Define the HTTP method.
+				httpPutRequest.Method = @"PUT";
 
-					// Specify that overwriting the destination is allowed.
-					httpPutRequest.Headers.Add(@"Overwrite", @"T");
+				// Specify that overwriting the destination is allowed.
+				httpPutRequest.Headers.Add(@"Overwrite", @"T");
 
-					httpPutRequest.Headers.Add(@"Keep-Alive", @"True");
+				// Optional, but allows for larger files.
+				httpPutRequest.SendChunked = false;
 
-					// Specify the content length.
-					httpPutRequest.ContentLength = file.Data.Length;
+				// Specify the content length.
+				httpPutRequest.ContentLength = file.Data.Length;
 
-					// Retrieve the request stream.
-					using (var requestStream = httpPutRequest.GetRequestStream())
+				var responseConsistency = false;
+				// Retrieve the request stream.
+				using (var stream = httpPutRequest.GetRequestStream())
+					await stream.WriteAsync(file.Data, 0, file.Data.Length).ContinueWith(t =>
 					{
-						await requestStream.WriteAsync(file.Data, 0, file.Data.Length);
-					}
-
-					// Retrieve the response.
-					httpPutRequest.GetResponseAsync().Wait(WaitTime);
-				}
-				catch (Exception ex)
+						// Retrieve the response.
+						httpPutRequest.GetResponseAsync().Wait();
+						responseConsistency = httpPutRequest.ContentLength == file.Data.Length;
+					});
+				return responseConsistency;
+			}
+			catch (Exception ex)
+			{
+				if (!ex.Message.Contains("405"))
 				{
-					if (!ex.Message.Contains("405"))
-					{
-						Console.WriteLine($"Ошибка: {ex.Message}");
-						Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
-						throw;
-					}
+					throw;
 				}
-		}
-
-		/// <summary>
-		/// Создает и выполняет запрос для создания конечной директории для загрузки файла в хранилище
-		/// </summary>
-		/// <param name="file">Добавляемый файл</param>
-		public async Task MKCOL(File file)
-		{
-			if (file?.FolderNames?.Count > 0)
-				try
-				{
-					// Create an HTTP request for the URL.
-					var httpMkColRequest = (HttpWebRequest)WebRequest.Create(ServerUrl + file.GetRemoteFolderPath());
-
-					// Set up new credentials.
-					httpMkColRequest.Credentials = new NetworkCredential(UserName, Password);
-
-					// Pre-authenticate the request.
-					httpMkColRequest.PreAuthenticate = true;
-
-					// Define the HTTP method.
-					httpMkColRequest.Method = @"MKCOL";
-
-					// Retrieve the response.
-					var task = httpMkColRequest.GetResponseAsync();
-					//task.Wait(WaitTime);
-					var httpMkColResponse = (HttpWebResponse)(await task);
-
-					if (httpMkColResponse.StatusCode == HttpStatusCode.Created && file.Data.Length > 0)
-						await Put(file);
-				}
-				catch (Exception ex)
-				{
-					if (!ex.Message.Contains("405"))
-					{
-						throw;
-					}
-				}
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -134,9 +81,9 @@ namespace Uploader
 		/// </summary>
 		/// <param name="url">Родительская директория</param>
 		/// <param name="remoteFolderPath">Дочерняя директория</param>
-		public async Task MKCOL(string url, string remoteFolderPath)
+		public async Task<bool> Mkcol(string url, string remoteFolderPath)
 		{
-			if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(remoteFolderPath)) return;
+			if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(remoteFolderPath)) return false;
 			try
 			{
 				// Create an HTTP request for the URL.
@@ -152,7 +99,10 @@ namespace Uploader
 				httpMkColRequest.Method = @"MKCOL";
 
 				// Retrieve the response.
-				httpMkColRequest.GetResponseAsync().Wait(WaitTime);
+				//httpMkColRequest.GetResponseAsync().Wait(WaitTime);
+				var result = (HttpWebResponse)await httpMkColRequest.GetResponseAsync();
+				if (result != null && result.StatusCode == HttpStatusCode.Created)
+					return true;
 			}
 			catch (Exception ex)
 			{
@@ -161,6 +111,7 @@ namespace Uploader
 					throw;
 				}
 			}
+			return false;
 		}
 	}
 }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading;
@@ -30,6 +31,7 @@ namespace Uploader
 				{
 					await _webDavProvider.Put(file);
 					Utils.ShowPercentProgress("3. Загружаем файлы", current, enumerable.Count);
+					Thread.Sleep(100);
 				}
 				finally
 				{
@@ -47,7 +49,7 @@ namespace Uploader
 			var enumerable = fileList.ToList();
 			foreach (var file in enumerable)
 			{
-				await _webDavProvider.Put(file);
+				_webDavProvider.Put(file).Wait();
 				Utils.ShowPercentProgress("3. Загружаем файлы", enumerable.IndexOf(file), enumerable.Count);
 			}
 		}
@@ -60,7 +62,7 @@ namespace Uploader
 		/// <returns>Возвращает SqlDataReader</returns>
 		public IEnumerable<File> GetFilesFromDb(string entity, IDbConnection connection)
 		{
-			string cmdSqlCommand = "";
+			var cmdSqlCommand = "";
 			if (entity.Equals("Account") || entity.Equals("Contact"))
 				cmdSqlCommand = $"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data from [dbo].[{entity}File] f " +
 				                $"WHERE f.{entity}Id is not null and f.Id is not null and f.Data is not null";

@@ -16,15 +16,51 @@ namespace Uploader
 		}
 
 		/// <summary>
+		/// Создает дополнительные директории из списка директорий
+		/// </summary>
+		/// <param name="folderNameList">Список директорий</param>
+		public async Task CreateFolders(IEnumerable<string> folderNameList)
+		{
+			var remoteFolderPath = "";
+			if (folderNameList == null) return;
+			foreach (var folderName in folderNameList)
+			{
+				var result = await _webDavProvider.Mkcol(_webDavProvider.ServerUrl + remoteFolderPath, folderName);
+				if (!remoteFolderPath.Contains(folderName))
+					remoteFolderPath += folderName + "/";
+			}
+		}
+
+		public async Task CreateFoldersFromGroupedList(IEnumerable<string> groupedFolderNameList)
+		{
+			if (groupedFolderNameList == null) throw new Exception("Список папок пуст.");
+			long current = 0;
+			var enumerable = groupedFolderNameList.ToList();
+			if (enumerable.Count == 0) return;
+			foreach (var folderName in enumerable)
+			{
+				try
+				{
+					await _webDavProvider.Mkcol(_webDavProvider.ServerUrl, folderName);
+					Utils.ShowPercentProgress("2. Создаём папки", current, enumerable.Count);
+				}
+				finally
+				{
+					Interlocked.Increment(ref current);
+				}
+			}
+		}
+
+		/// <summary>
 		/// Создает директории для файлов
 		/// </summary>
 		/// <returns></returns>
-		public async Task CreateFolders(IEnumerable<File> fileList)
+		public async Task CreateFoldersFromFileList(IEnumerable<File> fileList)
 		{
 			var enumerable = fileList.ToList();
 			foreach (var file in enumerable)
 			{
-				await _webDavProvider.CreateFolders(file.FolderNames);
+				await CreateFolders(file.FolderNames);
 				Utils.ShowPercentProgress("2. Создаём папки", enumerable.IndexOf(file), enumerable.Count);
 			}
 		}
@@ -37,29 +73,7 @@ namespace Uploader
 		{
 			Console.WriteLine("2. Создаем папки");
 			var enumerable = folderList.ToList();
-			await _webDavProvider.CreateFolders(enumerable);
-		}
-
-		/// <summary>
-		/// Создает директории для файлов параллельно
-		/// </summary>
-		/// <returns></returns>
-		public async Task CreateFoldersInParallel(IEnumerable<File> fileList)
-		{
-			long current = 0;
-			var enumerable = fileList.ToList();
-			Parallel.ForEach(enumerable, async (file, state, s) =>
-			{
-				try
-				{
-					await _webDavProvider.CreateFolders(file?.FolderNames);
-					Utils.ShowPercentProgress("2. Создаём папки", current, enumerable.Count);
-				}
-				finally
-				{
-					Interlocked.Increment(ref current);
-				}
-			});
+			await CreateFolders(enumerable);
 		}
 	}
 }
