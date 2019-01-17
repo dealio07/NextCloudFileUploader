@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Uploader
+namespace NextCloudFileUploader
 {
 	public class File
 	{

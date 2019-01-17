@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Uploader
+namespace NextCloudFileUploader
 {
 	public class Utils
 	{
@@ -15,7 +15,7 @@ namespace Uploader
 			var percent = (100 * (processed + 1)) / total;
 			if (processed >= total - 1 && percent < 100)
 				percent = 100;
-			Console.Write($"\r{message}: {percent : ##0.#}% выполнено {processed + 1} из {total}");
+			Console.Write($"\r{message}: {percent : ##0.#}% (выполнено {processed + 1} из {total})");
 			if (processed >= total - 1)
 				Console.Write(Environment.NewLine);
 		}
