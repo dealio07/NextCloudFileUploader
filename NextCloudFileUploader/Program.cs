@@ -47,8 +47,7 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Строка для создания соединения
 		/// </summary>
-		private const string ConnectionString = "Data Source=" + DbServerName + ";Initial Catalog=" + InitialCatalog +
-		                                        ";Trusted_Connection=True;";
+		private const string ConnectionString = "Data Source=" + DbServerName + ";Initial Catalog=" + InitialCatalog + ";Trusted_Connection=True;";
 		/// <summary>
 		/// Провайдер WebDav
 		/// </summary>
@@ -96,8 +95,8 @@ namespace NextCloudFileUploader
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine($"\nОшибка: {ex.Message}");
-					Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
+					Console.WriteLine($@"{Environment.NewLine}Ошибка: {ex.Message}");
+					Console.WriteLine($@"Стек ошибки: {ex.StackTrace}");
 					throw;
 				}
 				finally
@@ -112,51 +111,24 @@ namespace NextCloudFileUploader
 		/// Создает папки и загружает в них файлы
 		/// </summary>
 		/// <param name="watch">Часы для отслеживания потраченного времени</param>
-		private static void CreateFoldersAndUploadFilesThroughTaskFactory(Stopwatch watch)
-		{
-			Task.Factory.ContinueWhenAll(new[] { _folderService.CreateFoldersFromGroupedList(_folderList) },
-					tasks =>
-					{
-						watch.Stop();
-						Console.WriteLine($"2. Папки созданы за {watch.ElapsedMilliseconds} мс");
-						watch.Restart();
-					})
-				.ContinueWith(async task => await Task.Factory.ContinueWhenAll(new[] { _fileService.UploadFiles(_fileList) },
-					tasks =>
-					{
-						watch.Stop();
-						var filesTotalSize = 0;
-						_fileList.Where(file => file.Entity == "AccountFile").ToList().ForEach(file =>
-						{
-							filesTotalSize += file.Data.Length;
-						});
-						Console.WriteLine($"3. Файлы загружены за {watch.ElapsedMilliseconds} мс");
-						Console.WriteLine($"Общий объем файлов в Account: {filesTotalSize / 1000000.0:###.##} МБ");
-						Console.WriteLine("Нажмите Enter, чтобы выйти.");
-					}));
-		}
-
 		private static async Task CreateFoldersAndUploadFiles(Stopwatch watch)
 		{
 			try
 			{
 				await _folderService.CreateFoldersFromGroupedList(_folderList);
 				watch.Stop();
-				Console.WriteLine($"2. Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
+				Console.WriteLine($@"2. Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
 				watch.Restart();
 				await _fileService.UploadFiles(_fileList);
 				watch.Stop();
 				var filesTotalSize = 0;
-				_fileList.ToList().ForEach(file =>
-				{
-					filesTotalSize += file.Data.Length;
-				});
-				Console.WriteLine($"3. Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
-				Console.WriteLine($"Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ");
+				_fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
+				Console.WriteLine($@"3. Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
+				Console.WriteLine($@"Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ");
 			}
 			catch
 			{
-				Console.WriteLine("Ошибка в методе CreateFoldersAndUploadFiles");
+				Console.WriteLine(@"Ошибка в методе CreateFoldersAndUploadFiles");
 				throw;
 			}
 		}
@@ -170,10 +142,10 @@ namespace NextCloudFileUploader
 			_folderList = _fileList.GroupBy(file => file.Entity).Select(grouped => grouped.Key).ToList();
 			// По сущности и ID сущности
 			_folderList.AddRange(_fileList.GroupBy(file => (file.Entity, file.EntityId))
-				.Select(grouped => $"{grouped.Key.Item1}/{grouped.Key.Item2}"));
+				.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}"));
 			// По сущности, ID сущности и ID файла
 			_folderList.AddRange(_fileList.GroupBy(file => (file.Entity, file.EntityId, file.FileId))
-				.Select(grouped => $"{grouped.Key.Item1}/{grouped.Key.Item2}/{grouped.Key.Item3}"));
+				.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}/{grouped.Key.FileId}"));
 		}
 
 		/// <summary>
@@ -182,13 +154,13 @@ namespace NextCloudFileUploader
 		/// <param name="connection">Соединение с базой</param>
 		private static void FillFileList(IDbConnection connection)
 		{
-			Console.WriteLine("1. Получаем файлы из базы");
+			Console.WriteLine(@"1. Получаем файлы из базы");
 			foreach (var entity in Entities)
 			{
 				_fileList.AddRange(_fileService.GetFilesFromDb(entity, connection));
 			}
 
-			Console.WriteLine("1. Файлы получены");
+			Console.WriteLine(@"1. Файлы получены");
 		}
 
 		/// <summary>
@@ -196,7 +168,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForName()
 		{
-			Console.WriteLine("Введите логин:");
+			Console.WriteLine(@"Введите логин:");
 			_userName = Console.ReadLine();
 		}
 
@@ -205,7 +177,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForPassword()
 		{
-			Console.WriteLine("Введите пароль:");
+			Console.WriteLine(@"Введите пароль:");
 			_password = Utils.ReadAndMaskInputPassword();
 		}
 	}
