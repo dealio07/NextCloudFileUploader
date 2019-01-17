@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.OleDb;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,10 +13,13 @@ namespace NextCloudFileUploader
 	public class FileService
 	{
 		private WebDavProvider _webDavProvider;
+		private IDbConnection _dbConnection;
+		private File _lastFile;
 
-		public FileService(WebDavProvider webDavProvider)
+		public FileService(WebDavProvider webDavProvider, IDbConnection dbConnection)
 		{
 			_webDavProvider = webDavProvider;
+			_dbConnection = dbConnection;
 		}
 
 		/// <summary>
@@ -23,19 +28,34 @@ namespace NextCloudFileUploader
 		/// <returns></returns>
 		public async Task<bool> UploadFiles(IEnumerable<File> fileList)
 		{
-
 			var enumerable = fileList.ToList();
-			long current = 0;
+			var current = 0;
+
+			if (_lastFile == null)
+				_lastFile = GetLastFileFromDb();
+
+			if (_lastFile != null)
+			{
+				var count = enumerable.Count;
+				var lastFileIndex = enumerable.FindIndex(file => file.Entity == _lastFile.Entity
+				                             && file.EntityId == _lastFile.EntityId
+				                             && file.FileId == _lastFile.FileId
+				                             && file.Version == _lastFile.Version);
+				if (lastFileIndex > 0)
+					enumerable = enumerable.GetRange(lastFileIndex, count - lastFileIndex);
+			}
+
 			foreach (var file in enumerable)
 			{
 				try
 				{
-					var result = await _webDavProvider.PutWithHttp(file);
-					Utils.ShowPercentProgress("3. Загружаем файлы", current, enumerable.Count);
-					
+					//if (current == 3)
+					//	throw new Exception("Тест сохранения");
+					var result = await _webDavProvider.PutWithHttp(file, current, enumerable.Count);
 				}
 				catch (Exception ex)
 				{
+					SavePositionToDb(file);
 					Console.WriteLine("\nОшибка в методе UploadFiles");
 					Console.WriteLine($"Ошибка: {ex.Message}");
 					Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
@@ -47,6 +67,8 @@ namespace NextCloudFileUploader
 				}
 			}
 
+			DeleteLastFileFromDb();
+
 			return true;
 
 		}
@@ -57,28 +79,140 @@ namespace NextCloudFileUploader
 		/// <param name="entity">Название сущности</param>
 		/// <param name="connection">Соединение с базой</param>
 		/// <returns>Возвращает SqlDataReader</returns>
-		public IEnumerable<File> GetFilesFromDb(string entity, IDbConnection connection)
+		public IEnumerable<File> GetFilesFromDb(string entity)
 		{
-			var cmdSqlCommand = "";
-			if (entity.Equals("Account") || entity.Equals("Contact"))
-				cmdSqlCommand =
-					$"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data from [dbo].[{entity}File] f WITH (NOLOCK) " +
-					$"WHERE f.{entity}Id is not null and f.Id is not null and f.Data is not null " +
-					$"ORDER BY f.{entity}Id DESC, f.Id DESC";
-			if (entity.Equals("Contract"))
-				cmdSqlCommand = 
-					$"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv WITH (NOLOCK) " +
-				    $"WHERE fv.PTFile = f.Id and f.{entity}Id is not null and f.Id is not null and f.Data is not null " +
-					$"ORDER BY f.{entity}Id DESC, f.Id DESC";
+			try
+			{
+				if ((_dbConnection.State & ConnectionState.Open) == 0)
+					_dbConnection.Open();
 
-			return connection.Query<File>(cmdSqlCommand).ToList();
+				var cmdSqlCommand = "";
+				if (entity.Equals("Account") || entity.Equals("Contact"))
+					cmdSqlCommand =
+						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data from [dbo].[{entity}File] f 
+					   WITH (NOLOCK) 
+					   WHERE f.{entity}Id is not null and f.Id is not null and f.Data is not null 
+					   ORDER BY f.CreatedOn";
+				if (entity.Equals("Contract"))
+					cmdSqlCommand =
+						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv 
+					   WITH (NOLOCK) 
+					   WHERE fv.PTFile = f.Id and f.{entity}Id is not null and f.Id is not null and f.Data is not null 
+					   ORDER BY f.CreatedOn";
+
+				return _dbConnection.Query<File>(cmdSqlCommand).ToList();
+			}
+			catch (Exception ex)
+			{
+				throw ex;
+			}
+			finally
+			{
+				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+			}
 		}
 
-		public string SavePositionToDB(File file, IDbConnection connection)
+		/// <summary>
+		/// Сохраняет данные файла, на котором прервалась загрузка
+		/// </summary>
+		/// <param name="file">Файл</param>
+		/// <param name="connection">Соединение с базой данных</param>
+		/// <returns>Возвращает количество измененных строк в таблице (0 или 1)</returns>
+		private int SavePositionToDb(File file)
 		{
-			var command = connection.CreateCommand();
-			command.CommandText = "UPDATE";
-			return "";
+			try
+			{
+				var command = $@"BEGIN TRAN
+									 IF EXISTS (SELECT f.* FROM [dbo].[LastFileUploadedToNextCloud] f WITH (UPDLOCK,SERIALIZABLE) 
+											    WHERE f.Version LIKE '%')
+									 BEGIN
+									 UPDATE [dbo].[LastFileUploadedToNextCloud] 
+											SET Entity =	'{file.Entity}', 
+												EntityId =	'{file.EntityId}', 
+												FileId =	'{file.FileId}', 
+												Version =	'{file.Version}',
+												Data =		@Data
+											WHERE Version LIKE '%'
+									 END
+									 ELSE
+									 BEGIN
+										INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
+										VALUES ('{file.Entity}', '{file.EntityId}', '{file.FileId}', '{file.Version}', @Data)
+									 END
+									 COMMIT TRAN";
+				using (SqlCommand _cmd = new SqlCommand(command, (SqlConnection)_dbConnection))
+				{
+					SqlParameter param = _cmd.Parameters.Add("@Data", SqlDbType.VarBinary);
+					param.Value = file.Data;
+
+					_dbConnection.Open();
+					var result = _cmd.ExecuteNonQuery();
+					return result;
+				}
+			}
+			catch (Exception ex)
+			{
+				throw ex;
+			}
+			finally
+			{
+				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+			}
+		}
+
+		/// <summary>
+		/// Достает из базы данных последний файл, на котором прервалась загрузка
+		/// </summary>
+		/// <returns>Возвращает последний файл, на котором прервалась загрузка</returns>
+		private File GetLastFileFromDb()
+		{
+			try
+			{
+				if ((_dbConnection.State & ConnectionState.Open) == 0)
+					_dbConnection.Open();
+
+				var cmd = $@"
+				SELECT f.Entity as 'Entity', f.EntityId as 'EntityId', f.FileId as 'FileId', f.Version as 'Version', f.Data as 'Data' FROM [dbo].[LastFileUploadedToNextCloud] f 
+				WITH (NOLOCK) 
+				WHERE f.Version LIKE '%' and f.Id is not null and f.Data is not null";
+
+				var file = _dbConnection.QuerySingleOrDefault<File>(cmd);
+
+				return file;
+			}
+			catch (Exception ex)
+			{
+				throw ex;
+			}
+			finally
+			{
+				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+			}
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <returns></returns>
+		private int DeleteLastFileFromDb()
+		{
+			try
+			{
+				if ((_dbConnection.State & ConnectionState.Open) == 0)
+					_dbConnection.Open();
+
+				var command = _dbConnection.CreateCommand();
+				command.CommandText = @"DELETE FROM [dbo].[LastFileUploadedToNextCloud] WHERE Version LIKE '%'";
+				return command.ExecuteNonQuery();
+			}
+			catch (Exception ex)
+			{
+				throw ex;
+			}
+			finally
+			{
+				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+			}
 		}
 	}
 }

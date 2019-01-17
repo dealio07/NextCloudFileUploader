@@ -27,7 +27,7 @@ namespace NextCloudFileUploader
 		/// Помещает файл в файловое хранилище
 		/// </summary>
 		/// <param name="file">Загружаемый файл</param>
-		public async Task<bool> PutWithHttp(File file)
+		public async Task<bool> PutWithHttp(File file, int currentIndex, int total)
 		{
 			if (file?.Data == null || !(file.FolderNames?.Count > 0)) return false;
 			try
@@ -39,15 +39,7 @@ namespace NextCloudFileUploader
 					var requestMessage =
 						new HttpRequestMessage(HttpMethod.Put, new Uri(ServerUrl + file.GetRemotePath()))
 						{
-							Content = new ByteArrayContent(file.Data)
-							{
-							//	Headers =
-							//{
-							//	{HttpRequestHeader.Translate.ToString(), "f" },
-							//	{HttpRequestHeader.ContentType.ToString(), "application/octet-stream" },
-							//	{HttpRequestHeader.ContentLength.ToString(), file.Data.ToString() }
-							//}
-							},
+							Content = new ByteArrayContent(file.Data),
 							Version = HttpVersion.Version11,
 							Headers =
 							{
@@ -56,9 +48,14 @@ namespace NextCloudFileUploader
 								{HttpRequestHeader.ContentLength.ToString(), file.Data.ToString() }
 							}
 						};
-					
+
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
-					Console.Write($@"{Environment.NewLine}File: {file.GetRemotePath()}, Size: {file.Data.Length / 1024.0:#####0.###} KB, Status: {result.StatusCode.ToString()}");
+					if (result.StatusCode == HttpStatusCode.Created)
+					{
+						Utils.ShowPercentProgress("3. Загружаем файлы", currentIndex, total);
+					}
+					//Console.WriteLine($" File: {file.GetRemotePath()}, Size: {file.Data.Length / 1024.0:#####0.###} KB, Status: {result.StatusCode.ToString()}");
+
 					return true;
 				}
 
@@ -83,7 +80,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		/// <param name="url">Родительская директория</param>
 		/// <param name="remoteFolderPath">Дочерняя директория</param>
-		public async Task<bool> Mkcol(string url, string remoteFolderPath)
+		public async Task<bool> Mkcol(string url, string remoteFolderPath, int currentIndex, int total)
 		{
 			if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(remoteFolderPath)) return false;
 			try
@@ -102,9 +99,13 @@ namespace NextCloudFileUploader
 
 				// Retrieve the response.
 				var result = (HttpWebResponse)await httpMkColRequest.GetResponseAsync();
-				Console.Write($"\nFolder: {remoteFolderPath} {result.StatusCode.ToString()}");
-				if (result != null && result.StatusCode == HttpStatusCode.Created)
-					return true;
+				if (result.StatusCode == HttpStatusCode.Created)
+				{
+					Utils.ShowPercentProgress("2. Создаём папки", currentIndex, total);
+				}
+				//Console.WriteLine($" Folder: {remoteFolderPath} {result.StatusCode.ToString()}");
+
+				return true;
 			}
 			catch (Exception ex)
 			{
@@ -112,8 +113,9 @@ namespace NextCloudFileUploader
 				{
 					throw;
 				}
+
+				return false;
 			}
-			return false;
 		}
 	}
 

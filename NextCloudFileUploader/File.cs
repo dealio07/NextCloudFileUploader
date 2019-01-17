@@ -6,12 +6,22 @@ namespace NextCloudFileUploader
 {
 	public class File
 	{
-		public string Entity { get; set; }
-		public string EntityId { get; set; }
-		public string FileId { get; set; }
-		public string Version { get; set; }
-		public byte[] Data { get; set; }
+		public string Entity { get; }
+		public string EntityId { get; }
+		public string FileId { get; }
+		public string Version { get; }
+		public byte[] Data { get; }
 		public List<string> FolderNames { get; }
+
+		public File(string entity, string entityId, string fileId, string version, byte[] data)
+		{
+			Entity = entity;
+			EntityId = entityId;
+			FileId = fileId;
+			Version = version;
+			Data = data;
+			FolderNames = SplitFolderName(GetRemoteFolderPath());
+		}
 
 		public File(string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{

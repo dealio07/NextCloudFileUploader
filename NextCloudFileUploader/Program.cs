@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 
 namespace NextCloudFileUploader
@@ -69,15 +70,11 @@ namespace NextCloudFileUploader
 		[STAThread]
 		static void Main()
 		{
-			//Application.EnableVisualStyles();
-			//Application.SetCompatibleTextRenderingDefault(false);
-			//Application.Run(new Form1());
-
 			var watch = Stopwatch.StartNew();
 
 			_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
 			_folderService = new FolderService(_webDavProvider);
-			_fileService = new FileService(_webDavProvider);
+			_fileService = new FileService(_webDavProvider, new SqlConnection(ConnectionString));
 
 			if (string.IsNullOrEmpty(_userName))
 				AskUserForName();
@@ -85,24 +82,20 @@ namespace NextCloudFileUploader
 			if (string.IsNullOrEmpty(_password))
 				AskUserForPassword();
 
-			using (IDbConnection connection = new SqlConnection(ConnectionString))
+			try
 			{
-				try
-				{
-					FillFileList(connection);
-					FillFolderList();
-					CreateFoldersAndUploadFiles(watch).Wait();
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine($@"{Environment.NewLine}Ошибка: {ex.Message}");
-					Console.WriteLine($@"Стек ошибки: {ex.StackTrace}");
-					throw;
-				}
-				finally
-				{
-					Console.ReadLine();
-				}
+				FillFileList();
+				FillFolderList();
+				CreateFoldersAndUploadFiles(watch);
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"{Environment.NewLine}Ошибка: {ex.Message}");
+				Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
+			}
+			finally
+			{
+				Console.ReadLine();
 			}
 		}
 
@@ -117,19 +110,19 @@ namespace NextCloudFileUploader
 			{
 				await _folderService.CreateFoldersFromGroupedList(_folderList);
 				watch.Stop();
-				Console.WriteLine($@"2. Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
+				Console.WriteLine($"2. Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
 				watch.Restart();
 				await _fileService.UploadFiles(_fileList);
 				watch.Stop();
 				var filesTotalSize = 0;
 				_fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
-				Console.WriteLine($@"3. Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
-				Console.WriteLine($@"Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ");
+				Console.WriteLine($"3. Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
+				Console.WriteLine($"Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ");
 			}
-			catch
+			catch (Exception ex)
 			{
-				Console.WriteLine(@"Ошибка в методе CreateFoldersAndUploadFiles");
-				throw;
+				Console.WriteLine("Ошибка в методе CreateFoldersAndUploadFiles");
+				throw ex;
 			}
 		}
 
@@ -151,16 +144,15 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Заполняет список файлов
 		/// </summary>
-		/// <param name="connection">Соединение с базой</param>
-		private static void FillFileList(IDbConnection connection)
+		private static void FillFileList()
 		{
-			Console.WriteLine(@"1. Получаем файлы из базы");
+			Console.WriteLine("1. Получаем файлы из базы");
 			foreach (var entity in Entities)
 			{
-				_fileList.AddRange(_fileService.GetFilesFromDb(entity, connection));
+				_fileList.AddRange(_fileService.GetFilesFromDb(entity));
 			}
 
-			Console.WriteLine(@"1. Файлы получены");
+			Console.WriteLine("1. Файлы получены");
 		}
 
 		/// <summary>
@@ -168,7 +160,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForName()
 		{
-			Console.WriteLine(@"Введите логин:");
+			Console.WriteLine("Введите логин:");
 			_userName = Console.ReadLine();
 		}
 
@@ -177,7 +169,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForPassword()
 		{
-			Console.WriteLine(@"Введите пароль:");
+			Console.WriteLine("Введите пароль:");
 			_password = Utils.ReadAndMaskInputPassword();
 		}
 	}
