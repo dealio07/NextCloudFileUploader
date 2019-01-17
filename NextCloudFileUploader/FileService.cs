@@ -31,19 +31,19 @@ namespace NextCloudFileUploader
 			var enumerable = fileList.ToList();
 			var current = 0;
 
-			if (_lastFile == null)
-				_lastFile = GetLastFileFromDb();
+			//if (_lastFile == null)
+			//	_lastFile = GetLastFileFromDb();
 
-			if (_lastFile != null)
-			{
-				var count = enumerable.Count;
-				var lastFileIndex = enumerable.FindIndex(file => file.Entity == _lastFile.Entity
-				                             && file.EntityId == _lastFile.EntityId
-				                             && file.FileId == _lastFile.FileId
-				                             && file.Version == _lastFile.Version);
-				if (lastFileIndex > 0)
-					enumerable = enumerable.GetRange(lastFileIndex, count - lastFileIndex);
-			}
+			//if (_lastFile != null)
+			//{
+			//	var count = enumerable.Count;
+			//	var lastFileIndex = enumerable.FindIndex(file => file.Entity == _lastFile.Entity
+			//								 && file.EntityId == _lastFile.EntityId
+			//								 && file.FileId == _lastFile.FileId
+			//								 && file.Version == _lastFile.Version);
+			//	if (lastFileIndex > 0)
+			//		enumerable = enumerable.GetRange(lastFileIndex, count - lastFileIndex);
+			//}
 
 			foreach (var file in enumerable)
 			{
@@ -55,7 +55,7 @@ namespace NextCloudFileUploader
 				}
 				catch (Exception ex)
 				{
-					SavePositionToDb(file);
+					SavePositionToDb(file, fileList);
 					Console.WriteLine("\nОшибка в методе UploadFiles");
 					Console.WriteLine($"Ошибка: {ex.Message}");
 					Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
@@ -89,16 +89,18 @@ namespace NextCloudFileUploader
 				var cmdSqlCommand = "";
 				if (entity.Equals("Account") || entity.Equals("Contact"))
 					cmdSqlCommand =
-						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data from [dbo].[{entity}File] f 
-					   WITH (NOLOCK) 
-					   WHERE f.{entity}Id is not null and f.Id is not null and f.Data is not null 
-					   ORDER BY f.CreatedOn";
+						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data FROM [dbo].[{entity}File] f 
+						WITH (NOLOCK) 
+						WHERE f.{entity}Id is not null AND f.Id is not null AND f.Data is not null AND
+						(f.{entity}Id not in (SELECT EntityId FROM [dbo].[LastFileUploadedToNextCloud] WHERE EntityId = f.{entity}Id AND FileId = f.Id AND Version = f.Version))
+						ORDER BY f.CreatedOn";
 				if (entity.Equals("Contract"))
 					cmdSqlCommand =
-						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' from [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv 
-					   WITH (NOLOCK) 
-					   WHERE fv.PTFile = f.Id and f.{entity}Id is not null and f.Id is not null and f.Data is not null 
-					   ORDER BY f.CreatedOn";
+						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' FROM [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv 
+						WITH (NOLOCK) 
+						WHERE fv.PTFile = f.Id AND f.{entity}Id is not null AND f.Id is not null AND f.Data is not null AND 
+						(f.{entity}Id not in (SELECT EntityId FROM [dbo].[LastFileUploadedToNextCloud] WHERE EntityId = f.{entity}Id AND FileId = f.Id AND Version = f.Version))
+						ORDER BY f.CreatedOn";
 
 				return _dbConnection.Query<File>(cmdSqlCommand).ToList();
 			}
@@ -118,28 +120,52 @@ namespace NextCloudFileUploader
 		/// <param name="file">Файл</param>
 		/// <param name="connection">Соединение с базой данных</param>
 		/// <returns>Возвращает количество измененных строк в таблице (0 или 1)</returns>
-		private int SavePositionToDb(File file)
+		private int SavePositionToDb(File file, List<File> fileList)
 		{
 			try
 			{
+				//var command = $@"BEGIN TRAN
+				//					 IF EXISTS (SELECT f.* FROM [dbo].[LastFileUploadedToNextCloud] f WITH (UPDLOCK,SERIALIZABLE) 
+				//							    WHERE f.Version LIKE '%')
+				//					 BEGIN
+				//					 UPDATE [dbo].[LastFileUploadedToNextCloud] 
+				//							SET Entity =	'{file.Entity}', 
+				//								EntityId =	'{file.EntityId}', 
+				//								FileId =	'{file.FileId}', 
+				//								Version =	'{file.Version}',
+				//								Data =		@Data
+				//							WHERE Version LIKE '%'
+				//					 END
+				//					 ELSE
+				//					 BEGIN
+				//						INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
+				//						VALUES ('{file.Entity}', '{file.EntityId}', '{file.FileId}', '{file.Version}', @Data)
+				//					 END
+				//					 COMMIT TRAN";
+				var values = "";
+				var notLoadedFiles = new List<File>();
+				var count = fileList.Count;
+				var lastFileIndex = fileList.FindIndex(f => f.Entity == file.Entity
+											 && f.EntityId == file.EntityId
+											 && f.FileId == file.FileId
+											 && f.Version == file.Version);
+				if (lastFileIndex > 0)
+					notLoadedFiles = fileList.GetRange(lastFileIndex, count - lastFileIndex);
+
+				foreach (var f in notLoadedFiles)
+				{
+					if (f.Data != null)
+					{
+						values += $"VALUES ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', 0x00),";
+					}
+				}
 				var command = $@"BEGIN TRAN
-									 IF EXISTS (SELECT f.* FROM [dbo].[LastFileUploadedToNextCloud] f WITH (UPDLOCK,SERIALIZABLE) 
-											    WHERE f.Version LIKE '%')
-									 BEGIN
-									 UPDATE [dbo].[LastFileUploadedToNextCloud] 
-											SET Entity =	'{file.Entity}', 
-												EntityId =	'{file.EntityId}', 
-												FileId =	'{file.FileId}', 
-												Version =	'{file.Version}',
-												Data =		@Data
-											WHERE Version LIKE '%'
-									 END
-									 ELSE
 									 BEGIN
 										INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
-										VALUES ('{file.Entity}', '{file.EntityId}', '{file.FileId}', '{file.Version}', @Data)
+										{values}
 									 END
 									 COMMIT TRAN";
+				//TODO: Сделать выгрузку кучи файлов
 				using (SqlCommand _cmd = new SqlCommand(command, (SqlConnection)_dbConnection))
 				{
 					SqlParameter param = _cmd.Parameters.Add("@Data", SqlDbType.VarBinary);
