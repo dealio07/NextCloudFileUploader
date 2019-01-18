@@ -26,10 +26,10 @@ namespace NextCloudFileUploader
 		/// <returns>Возвращает пароль</returns>
 		public static string ReadAndMaskInputPassword()
 		{
-			string password = "";
+			var password = "";
 			do
 			{
-				ConsoleKeyInfo key = Console.ReadKey(true);
+				var key = Console.ReadKey(true);
 				// Backspace не должен срабатывать
 				if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
 				{

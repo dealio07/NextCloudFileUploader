@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.OleDb;
-using System.Data.SqlClient;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,7 +12,6 @@ namespace NextCloudFileUploader
 	{
 		private WebDavProvider _webDavProvider;
 		private IDbConnection _dbConnection;
-		private File _lastFile;
 
 		public FileService(WebDavProvider webDavProvider, IDbConnection dbConnection)
 		{
@@ -23,43 +20,26 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Выгружает файлы в хранилище
+		/// Выгружает файлы в хранилище.
 		/// </summary>
 		/// <returns></returns>
-		public async Task<bool> UploadFiles(IEnumerable<File> fileList)
+		public async Task<bool> UploadFiles(IEnumerable<File> fileList, bool clearTempTableAfter)
 		{
-			var enumerable = fileList.ToList();
+			var files = fileList.ToList();
+			var enumerable = files;
 			var current = 0;
-
-			//if (_lastFile == null)
-			//	_lastFile = GetLastFileFromDb();
-
-			//if (_lastFile != null)
-			//{
-			//	var count = enumerable.Count;
-			//	var lastFileIndex = enumerable.FindIndex(file => file.Entity == _lastFile.Entity
-			//								 && file.EntityId == _lastFile.EntityId
-			//								 && file.FileId == _lastFile.FileId
-			//								 && file.Version == _lastFile.Version);
-			//	if (lastFileIndex > 0)
-			//		enumerable = enumerable.GetRange(lastFileIndex, count - lastFileIndex);
-			//}
 
 			foreach (var file in enumerable)
 			{
 				try
 				{
-					//if (current == 3)
-					//	throw new Exception("Тест сохранения");
 					var result = await _webDavProvider.PutWithHttp(file, current, enumerable.Count);
 				}
 				catch (Exception ex)
 				{
-					SavePositionToDb(file, fileList);
-					Console.WriteLine("\nОшибка в методе UploadFiles");
-					Console.WriteLine($"Ошибка: {ex.Message}");
-					Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
-					throw;
+					SaveLoadedFilesToTempTable(file, files);
+					ExceptionHandler.LogExceptionToConsole(ex);
+					throw ex;
 				}
 				finally
 				{
@@ -67,18 +47,19 @@ namespace NextCloudFileUploader
 				}
 			}
 
-			DeleteLastFileFromDb();
+			if (clearTempTableAfter)
+				DeleteFilesFromTempTable();
 
 			return true;
 
 		}
 
 		/// <summary>
-		/// Выполняет запрос в базу
+		/// Выбирает из базы все файлы по имени сущности за исключением файлов, загруженных при предыдущем запуске.
 		/// </summary>
 		/// <param name="entity">Название сущности</param>
 		/// <param name="connection">Соединение с базой</param>
-		/// <returns>Возвращает SqlDataReader</returns>
+		/// <returns>Возвращает файлы для выгрузки в хранилище</returns>
 		public IEnumerable<File> GetFilesFromDb(string entity)
 		{
 			try
@@ -106,6 +87,7 @@ namespace NextCloudFileUploader
 			}
 			catch (Exception ex)
 			{
+				ExceptionHandler.LogExceptionToConsole(ex);
 				throw ex;
 			}
 			finally
@@ -115,69 +97,51 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Сохраняет данные файла, на котором прервалась загрузка
+		/// Сохраняет данные файлов, которые были успешно выгружены в хранилище до ошибки.
 		/// </summary>
-		/// <param name="file">Файл</param>
-		/// <param name="connection">Соединение с базой данных</param>
-		/// <returns>Возвращает количество измененных строк в таблице (0 или 1)</returns>
-		private int SavePositionToDb(File file, List<File> fileList)
+		/// <param name="file">Последний выгруженный файл</param>
+		/// <param name="fileList">Все файлы</param>
+		private void SaveLoadedFilesToTempTable(File file, List<File> fileList)
 		{
 			try
 			{
-				//var command = $@"BEGIN TRAN
-				//					 IF EXISTS (SELECT f.* FROM [dbo].[LastFileUploadedToNextCloud] f WITH (UPDLOCK,SERIALIZABLE) 
-				//							    WHERE f.Version LIKE '%')
-				//					 BEGIN
-				//					 UPDATE [dbo].[LastFileUploadedToNextCloud] 
-				//							SET Entity =	'{file.Entity}', 
-				//								EntityId =	'{file.EntityId}', 
-				//								FileId =	'{file.FileId}', 
-				//								Version =	'{file.Version}',
-				//								Data =		@Data
-				//							WHERE Version LIKE '%'
-				//					 END
-				//					 ELSE
-				//					 BEGIN
-				//						INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
-				//						VALUES ('{file.Entity}', '{file.EntityId}', '{file.FileId}', '{file.Version}', @Data)
-				//					 END
-				//					 COMMIT TRAN";
-				var values = "";
-				var notLoadedFiles = new List<File>();
-				var count = fileList.Count;
+				if ((_dbConnection.State & ConnectionState.Open) == 0)
+					_dbConnection.Open();
+
+				var values = " VALUES";
+				var loadedFiles = new List<File>();
 				var lastFileIndex = fileList.FindIndex(f => f.Entity == file.Entity
 											 && f.EntityId == file.EntityId
 											 && f.FileId == file.FileId
 											 && f.Version == file.Version);
 				if (lastFileIndex > 0)
-					notLoadedFiles = fileList.GetRange(lastFileIndex, count - lastFileIndex);
+					loadedFiles = fileList.GetRange(0, lastFileIndex);
 
-				foreach (var f in notLoadedFiles)
+				foreach (var f in loadedFiles)
 				{
-					if (f.Data != null)
+					if (!string.IsNullOrEmpty(f.Entity) && !string.IsNullOrEmpty(f.EntityId) && !string.IsNullOrEmpty(f.FileId) && !string.IsNullOrEmpty(f.Version))
 					{
-						values += $"VALUES ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', 0x00),";
+						values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', 0x00),";
 					}
 				}
-				var command = $@"BEGIN TRAN
-									 BEGIN
-										INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
-										{values}
-									 END
-									 COMMIT TRAN";
-				//TODO: Сделать выгрузку кучи файлов
-				using (SqlCommand _cmd = new SqlCommand(command, (SqlConnection)_dbConnection))
-				{
-					SqlParameter param = _cmd.Parameters.Add("@Data", SqlDbType.VarBinary);
-					param.Value = file.Data;
 
-					_dbConnection.Open();
-					var result = _cmd.ExecuteNonQuery();
-					return result;
-				}
+				var valuesWithoutLastComma = values.Remove(values.Length - 1, 1);
+
+				var dbCommand = _dbConnection.CreateCommand();
+				dbCommand.CommandText = $@"BEGIN TRAN
+												 BEGIN
+													INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
+													{valuesWithoutLastComma}
+												 END
+												 COMMIT TRAN";
+
+				var result = dbCommand.ExecuteNonQuery();
+				if (result != loadedFiles.Count)
+					throw new Exception("Сохранились не все выгруженные файлы");
 			}
 			catch (Exception ex)
 			{
+				ExceptionHandler.LogExceptionToConsole(ex);
 				throw ex;
 			}
 			finally
@@ -187,27 +151,24 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Достает из базы данных последний файл, на котором прервалась загрузка
+		/// Проверяет наличие записей в таблице файлов, которые были успешно выгружены в хранилище до ошибки.
 		/// </summary>
-		/// <returns>Возвращает последний файл, на котором прервалась загрузка</returns>
-		private File GetLastFileFromDb()
+		/// <returns>Возвращает флаг, пуста ли таблица записей файлов, которые были успешно выгружены в хранилище до ошибки</returns>
+		public bool CheckTempTableEntriesCount()
 		{
 			try
 			{
 				if ((_dbConnection.State & ConnectionState.Open) == 0)
 					_dbConnection.Open();
 
-				var cmd = $@"
-				SELECT f.Entity as 'Entity', f.EntityId as 'EntityId', f.FileId as 'FileId', f.Version as 'Version', f.Data as 'Data' FROM [dbo].[LastFileUploadedToNextCloud] f 
-				WITH (NOLOCK) 
-				WHERE f.Version LIKE '%' and f.Id is not null and f.Data is not null";
-
-				var file = _dbConnection.QuerySingleOrDefault<File>(cmd);
-
-				return file;
+				var dbCommand = _dbConnection.CreateCommand();
+				dbCommand.CommandText = @"SELECT COUNT(*) FROM [dbo].[LastFileUploadedToNextCloud] WITH (NOLOCK)";
+				var result = dbCommand.ExecuteScalar();
+				return int.Parse(result.ToString()) > 0;
 			}
 			catch (Exception ex)
 			{
+				ExceptionHandler.LogExceptionToConsole(ex);
 				throw ex;
 			}
 			finally
@@ -217,22 +178,22 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// 
+		/// Очищает таблицу записей удачно выгруженных файлов.
 		/// </summary>
-		/// <returns></returns>
-		private int DeleteLastFileFromDb()
+		private void DeleteFilesFromTempTable()
 		{
 			try
 			{
 				if ((_dbConnection.State & ConnectionState.Open) == 0)
 					_dbConnection.Open();
 
-				var command = _dbConnection.CreateCommand();
-				command.CommandText = @"DELETE FROM [dbo].[LastFileUploadedToNextCloud] WHERE Version LIKE '%'";
-				return command.ExecuteNonQuery();
+				var dbCommand = _dbConnection.CreateCommand();
+				dbCommand.CommandText = @"DELETE FROM [dbo].[LastFileUploadedToNextCloud]";
+				dbCommand.ExecuteNonQuery();
 			}
 			catch (Exception ex)
 			{
+				ExceptionHandler.LogExceptionToConsole(ex);
 				throw ex;
 			}
 			finally

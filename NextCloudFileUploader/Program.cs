@@ -2,12 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-
 
 namespace NextCloudFileUploader
 {
@@ -16,11 +12,11 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Логин на NextCloud
 		/// </summary>
-		private static string _userName = "varga";    // TODO: Очистить
+		private static string _userName = "";
 		/// <summary>
 		/// Пароль от аккаунта на NextCloud
 		/// </summary>
-		private static string _password = "qiz2Zs"; // TODO: Очистить
+		private static string _password = "";
 		/// <summary>
 		/// Сущности
 		/// </summary>
@@ -40,15 +36,15 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Имя сервера базы
 		/// </summary>
-		private const string DbServerName = "crm-dev";  // TODO: Заменить
+		private static string _dbServerName = "";
 		/// <summary>
 		/// Имя базы
 		/// </summary>
-		private const string InitialCatalog = "DOdevVarha"; // TODO: Заменить
+		private static string _initialCatalog = "";
 		/// <summary>
-		/// Строка для создания соединения
+		/// Строка соединения с базой данных
 		/// </summary>
-		private const string ConnectionString = "Data Source=" + DbServerName + ";Initial Catalog=" + InitialCatalog + ";Trusted_Connection=True;";
+		private static readonly string СonnectionString = $"Data Source={_dbServerName};Initial Catalog={_initialCatalog};Trusted_Connection=True;";
 		/// <summary>
 		/// Провайдер WebDav
 		/// </summary>
@@ -61,8 +57,12 @@ namespace NextCloudFileUploader
 		/// Сервис работы с файлами
 		/// </summary>
 		private static FileService _fileService;
+		/// <summary>
+		/// Удалять ли временные записи удачно загруженных файлов
+		/// </summary>
+		private static bool _clearTempTableAfterSuccess;
 
-		public const string Top = "top(3)";   // TODO: Убрать в проде
+		public const string Top = "top(10)";   // TODO: Убрать в проде
 
 		/// <summary>
 		/// The main entry point for the application.
@@ -70,28 +70,33 @@ namespace NextCloudFileUploader
 		[STAThread]
 		static void Main()
 		{
-			var watch = Stopwatch.StartNew();
-
-			_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
-			_folderService = new FolderService(_webDavProvider);
-			_fileService = new FileService(_webDavProvider, new SqlConnection(ConnectionString));
-
+			if (string.IsNullOrEmpty(_dbServerName))
+				AskForDbServerName();
+			if (string.IsNullOrEmpty(_initialCatalog))
+				AskForInitialCatalog();
 			if (string.IsNullOrEmpty(_userName))
 				AskUserForName();
-
 			if (string.IsNullOrEmpty(_password))
 				AskUserForPassword();
-
+			
 			try
 			{
+				_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
+				_folderService = new FolderService(_webDavProvider);
+				_fileService = new FileService(_webDavProvider, new SqlConnection(СonnectionString));
+
+				if (_fileService.CheckTempTableEntriesCount())
+					AskUserToClearTempTableOrNot();
+
 				FillFileList();
 				FillFolderList();
-				CreateFoldersAndUploadFiles(watch);
+				
+				CreateFoldersAndUploadFiles(Stopwatch.StartNew()).Wait();
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"{Environment.NewLine}Ошибка: {ex.Message}");
-				Console.WriteLine($"Стек ошибки: {ex.StackTrace}");
+				ExceptionHandler.LogExceptionToConsole(ex);
+				throw;
 			}
 			finally
 			{
@@ -103,31 +108,31 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Создает папки и загружает в них файлы
 		/// </summary>
-		/// <param name="watch">Часы для отслеживания потраченного времени</param>
+		/// <param name="watch">Таймер</param>
 		private static async Task CreateFoldersAndUploadFiles(Stopwatch watch)
 		{
 			try
 			{
 				await _folderService.CreateFoldersFromGroupedList(_folderList);
 				watch.Stop();
-				Console.WriteLine($"2. Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
+				Console.WriteLine($"[ Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ]");
 				watch.Restart();
-				await _fileService.UploadFiles(_fileList);
+				await _fileService.UploadFiles(_fileList, _clearTempTableAfterSuccess);
 				watch.Stop();
 				var filesTotalSize = 0;
 				_fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
-				Console.WriteLine($"3. Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с");
-				Console.WriteLine($"Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ");
+				Console.WriteLine($"[ Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ]");
+				Console.WriteLine($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ <<<");
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine("Ошибка в методе CreateFoldersAndUploadFiles");
+				ExceptionHandler.LogExceptionToConsole(ex);
 				throw ex;
 			}
 		}
 
 		/// <summary>
-		/// Заполняет список директорий
+		/// Заполняет список папок.
 		/// </summary>
 		private static void FillFolderList()
 		{
@@ -142,7 +147,7 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Заполняет список файлов
+		/// Заполняет список файлов.
 		/// </summary>
 		private static void FillFileList()
 		{
@@ -156,12 +161,21 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Просит пользователя ввести логин.
+		/// Просит пользователя ввести имя учетной записи.
 		/// </summary>
 		private static void AskUserForName()
 		{
-			Console.WriteLine("Введите логин:");
-			_userName = Console.ReadLine();
+			while (true)
+			{
+				Console.Write("Введите имя учетной записи:");
+				_userName = Console.ReadLine();
+				if (!string.IsNullOrEmpty(_userName))
+				{
+					Console.WriteLine();
+					break;
+				}
+				Console.Write("\r");
+			}
 		}
 
 		/// <summary>
@@ -169,8 +183,82 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForPassword()
 		{
-			Console.WriteLine("Введите пароль:");
-			_password = Utils.ReadAndMaskInputPassword();
+			while (true)
+			{
+				Console.Write("Введите пароль:");
+				_password = Utils.ReadAndMaskInputPassword();
+				if (!string.IsNullOrEmpty(_password))
+				{
+					Console.WriteLine();
+					break;
+				}
+				Console.Write("\r");
+			}
+		}
+
+		/// <summary>
+		/// Спрашивает пользователя, очищать ли таблицу записей удачно выгруженных файлов.
+		/// </summary>
+		private static void AskUserToClearTempTableOrNot()
+		{
+			Console.WriteLine("В таблице удачно выгруженных файлов имеются записи. Очистить?");
+
+			while (true)
+			{
+				Console.Write("Ввести '+' или '-': ");
+				var answer = Console.ReadKey();
+				switch (answer.Key)
+				{
+					case ConsoleKey.Add:
+						_clearTempTableAfterSuccess = true;
+						Console.WriteLine();
+						break;
+					case ConsoleKey.Subtract:
+						_clearTempTableAfterSuccess = false;
+						Console.WriteLine();
+						break;
+					default:
+						Console.Write("\r");
+						continue;
+				}
+				break;
+			}
+		}
+
+		/// <summary>
+		/// Спрашивает у пользователя название сервера базы данных
+		/// </summary>
+		private static void AskForDbServerName()
+		{
+			while (true)
+			{
+				Console.Write("Введите название сервера базы данных:");
+				_dbServerName = Console.ReadLine();
+				if (!string.IsNullOrEmpty(_dbServerName))
+				{
+					Console.WriteLine();
+					break;
+				}
+				Console.Write("\r");
+			}
+		}
+
+		/// <summary>
+		/// Спрашивает у пользователя название базы данных (каталога)
+		/// </summary>
+		private static void AskForInitialCatalog()
+		{
+			while (true)
+			{
+				Console.Write("Введите название базы данных (каталога):");
+				_initialCatalog = Console.ReadLine();
+				if (!string.IsNullOrEmpty(_initialCatalog))
+				{
+					Console.WriteLine();
+					break;
+				}
+				Console.Write("\r");
+			}
 		}
 	}
 }

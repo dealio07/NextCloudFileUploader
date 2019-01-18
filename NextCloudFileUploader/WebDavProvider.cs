@@ -7,9 +7,6 @@ namespace NextCloudFileUploader
 {
 	public class WebDavProvider
 	{
-		/// <summary>
-		/// Адрес удаленного хранилища
-		/// </summary>
 		public string ServerUrl { get; }
 
 		private string UserName;
@@ -24,9 +21,11 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Помещает файл в файловое хранилище
+		/// Помещает файл в файловое хранилище.
 		/// </summary>
-		/// <param name="file">Загружаемый файл</param>
+		/// <param name="file">Выгружаемый файл</param>
+		/// <param name="currentIndex">Индекс данного выгружаемого файла среди всех выгружаемых файлов</param>
+		/// <param name="total">Количество выгружаемых файлов</param>
 		public async Task<bool> PutWithHttp(File file, int currentIndex, int total)
 		{
 			if (file?.Data == null || !(file.FolderNames?.Count > 0)) return false;
@@ -54,7 +53,6 @@ namespace NextCloudFileUploader
 					{
 						Utils.ShowPercentProgress("3. Загружаем файлы", currentIndex, total);
 					}
-					//Console.WriteLine($" File: {file.GetRemotePath()}, Size: {file.Data.Length / 1024.0:#####0.###} KB, Status: {result.StatusCode.ToString()}");
 
 					return true;
 				}
@@ -67,54 +65,43 @@ namespace NextCloudFileUploader
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"{Environment.NewLine}Ошибка в методе PutWithHttp");
-				Console.WriteLine($"Файл: {file.GetRemotePath()}");
-				Console.WriteLine($"Ошибка: {ex.Message}");
-				Console.WriteLine();
-				throw;
+				ExceptionHandler.LogExceptionToConsole(ex);
+				throw ex;
 			}
 		}
-		
+
 		/// <summary>
-		/// Создает и выполняет запрос для создания дочерней директории в родительской
+		/// Создает и выполняет запрос для создания дочерней папки в родительской папке в хранилище.
 		/// </summary>
-		/// <param name="url">Родительская директория</param>
-		/// <param name="remoteFolderPath">Дочерняя директория</param>
+		/// <param name="url">Родительская папка</param>
+		/// <param name="remoteFolderPath">Дочерняя папка</param>
+		/// <param name="currentIndex">Индекс данной создаваемой папки среди всех создаваемых папок.</param>
+		/// <param name="total">Количество создаваемых папок</param>
 		public async Task<bool> Mkcol(string url, string remoteFolderPath, int currentIndex, int total)
 		{
 			if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(remoteFolderPath)) return false;
 			try
 			{
-				// Create an HTTP request for the URL.
 				var httpMkColRequest = (HttpWebRequest)WebRequest.Create(url + remoteFolderPath);
 
-				// Set up new credentials.
 				httpMkColRequest.Credentials = new NetworkCredential(UserName, Password);
-
-				// Pre-authenticate the request.
 				httpMkColRequest.PreAuthenticate = true;
-
-				// Define the HTTP method.
 				httpMkColRequest.Method = @"MKCOL";
 
-				// Retrieve the response.
 				var result = (HttpWebResponse)await httpMkColRequest.GetResponseAsync();
 				if (result.StatusCode == HttpStatusCode.Created)
 				{
 					Utils.ShowPercentProgress("2. Создаём папки", currentIndex, total);
 				}
-				//Console.WriteLine($" Folder: {remoteFolderPath} {result.StatusCode.ToString()}");
 
 				return true;
 			}
 			catch (Exception ex)
 			{
-				if (!ex.Message.Contains("405"))
-				{
-					throw;
-				}
+				if (ex.Message.Contains("405")) return false;
+				ExceptionHandler.LogExceptionToConsole(ex);
+				throw ex;
 
-				return false;
 			}
 		}
 	}
