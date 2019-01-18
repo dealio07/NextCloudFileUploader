@@ -49,10 +49,7 @@ namespace NextCloudFileUploader
 						};
 
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
-					if (result.StatusCode == HttpStatusCode.Created)
-					{
-						Utils.ShowPercentProgress("3. Выгружаем файлы", currentIndex, total);
-					}
+					Utils.ShowPercentProgress("3. Выгружаем файлы", currentIndex, total);
 
 					return true;
 				}
@@ -89,10 +86,7 @@ namespace NextCloudFileUploader
 				httpMkColRequest.Method = @"MKCOL";
 
 				var result = (HttpWebResponse)await httpMkColRequest.GetResponseAsync();
-				if (result.StatusCode == HttpStatusCode.Created)
-				{
-					Utils.ShowPercentProgress("2. Создаём папки", currentIndex, total);
-				}
+				Utils.ShowPercentProgress("2. Создаём папки", currentIndex, total);
 
 				return true;
 			}

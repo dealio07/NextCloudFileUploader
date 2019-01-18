@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,21 +20,22 @@ namespace NextCloudFileUploader
 			_dbConnection = dbConnection;
 		}
 
-		/// <summary>
-		/// Выгружает файлы в хранилище.
-		/// </summary>
-		/// <returns></returns>
-		public async Task<bool> UploadFiles(IEnumerable<File> fileList, bool clearTempTableAfter)
+        /// <summary>
+        /// Выгружает файлы в хранилище.
+        /// </summary>
+        /// <param name="fileList">Список файлов, которые следует выгрузить</param>
+        /// <param name="clearTempTableAfter">Флаг, указывающий на необходимость очисти временной таблицы после удачной выгрузки</param>
+        /// /// <param name="saveDataAboutUploadedFiles">Флаг, указывающий на необходимость сохранить данные об успешно выгруженных файлах во временную таблицу</param>
+        public async Task<bool> UploadFiles(IEnumerable<File> fileList, bool clearTempTableAfter, bool saveDataAboutUploadedFiles)
 		{
 			var files = fileList.ToList();
-			var enumerable = files;
 			var current = 0;
 
-			foreach (var file in enumerable)
+			foreach (var file in files)
 			{
 				try
 				{
-					var result = await _webDavProvider.PutWithHttp(file, current, enumerable.Count);
+					var result = await _webDavProvider.PutWithHttp(file, current, files.Count);
 				}
 				catch (Exception ex)
 				{
@@ -47,18 +49,23 @@ namespace NextCloudFileUploader
 				}
 			}
 
-			if (clearTempTableAfter)
+			if (clearTempTableAfter && !saveDataAboutUploadedFiles)
 				DeleteFilesFromTempTable();
+            if (saveDataAboutUploadedFiles && !clearTempTableAfter)
+                SaveAllLoadedFilesToTempTable(files);
+			if (clearTempTableAfter && saveDataAboutUploadedFiles)
+			{
+				DeleteFilesFromTempTable();
+				SaveAllLoadedFilesToTempTable(files);
+			}
 
 			return true;
-
 		}
 
 		/// <summary>
 		/// Выбирает из базы все файлы по имени сущности за исключением файлов, загруженных при предыдущем запуске.
 		/// </summary>
 		/// <param name="entity">Название сущности</param>
-		/// <param name="connection">Соединение с базой</param>
 		/// <returns>Возвращает файлы для выгрузки в хранилище</returns>
 		public IEnumerable<File> GetFilesFromDb(string entity)
 		{
@@ -100,7 +107,7 @@ namespace NextCloudFileUploader
 		/// Сохраняет данные файлов, которые были успешно выгружены в хранилище до ошибки.
 		/// </summary>
 		/// <param name="file">Последний выгруженный файл</param>
-		/// <param name="fileList">Все файлы</param>
+		/// <param name="fileList">Список файлов</param>
 		private void SaveLoadedFilesToTempTable(File file, List<File> fileList)
 		{
 			try
@@ -117,17 +124,19 @@ namespace NextCloudFileUploader
 				if (lastFileIndex > 0)
 					loadedFiles = fileList.GetRange(0, lastFileIndex);
 
+				var dbCommand = _dbConnection.CreateCommand();
+
 				foreach (var f in loadedFiles)
 				{
 					if (!string.IsNullOrEmpty(f.Entity) && !string.IsNullOrEmpty(f.EntityId) && !string.IsNullOrEmpty(f.FileId) && !string.IsNullOrEmpty(f.Version))
 					{
-						values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', 0x00),";
+						values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', @Data{f.Entity}{f.EntityId}{f.FileId}),";
+						dbCommand.Parameters.Add(new SqlParameter($"@Data{f.Entity}{f.EntityId}{f.FileId}", SqlDbType.VarBinary) { Value = f.Data });
 					}
 				}
 
 				var valuesWithoutLastComma = values.Remove(values.Length - 1, 1);
 
-				var dbCommand = _dbConnection.CreateCommand();
 				dbCommand.CommandText = $@"BEGIN TRAN
 												 BEGIN
 													INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
@@ -150,11 +159,59 @@ namespace NextCloudFileUploader
 			}
 		}
 
-		/// <summary>
-		/// Проверяет наличие записей в таблице файлов, которые были успешно выгружены в хранилище до ошибки.
+        /// <summary>
+		/// Сохраняет данные всех файлов, которые были успешно выгружены в хранилище.
 		/// </summary>
-		/// <returns>Возвращает флаг, пуста ли таблица записей файлов, которые были успешно выгружены в хранилище до ошибки</returns>
-		public bool CheckTempTableEntriesCount()
+		/// <param name="fileList">Список всех файлов</param>
+		private void SaveAllLoadedFilesToTempTable(List<File> fileList)
+        {
+            try
+            {
+                if ((_dbConnection.State & ConnectionState.Open) == 0)
+                    _dbConnection.Open();
+
+                var values = " VALUES";
+
+				var dbCommand = _dbConnection.CreateCommand();
+
+				foreach (var f in fileList)
+                {
+                    if (!string.IsNullOrEmpty(f.Entity) && !string.IsNullOrEmpty(f.EntityId) && !string.IsNullOrEmpty(f.FileId) && !string.IsNullOrEmpty(f.Version))
+                    {
+                        values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', @Data{f.Entity}{f.EntityId}{f.FileId}),";
+						dbCommand.Parameters.Add(new SqlParameter($"@Data{f.Entity}{f.EntityId}{f.FileId}", SqlDbType.VarBinary) { Value = f.Data });
+					}
+                }
+
+                var valuesWithoutLastComma = values.Remove(values.Length - 1, 1);
+
+                dbCommand.CommandText = $@"BEGIN TRAN
+												 BEGIN
+													INSERT INTO [dbo].[LastFileUploadedToNextCloud] (Entity, EntityId, FileId, Version, Data)
+													{valuesWithoutLastComma}
+												 END
+										   COMMIT TRAN";
+
+                var result = dbCommand.ExecuteNonQuery();
+                if (result != fileList.Count)
+                    throw new Exception("Сохранились не все выгруженные файлы");
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.LogExceptionToConsole(ex);
+                throw ex;
+            }
+            finally
+            {
+                if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+            }
+        }
+
+        /// <summary>
+        /// Проверяет наличие записей в таблице файлов, которые были успешно выгружены в хранилище до ошибки.
+        /// </summary>
+        /// <returns>Возвращает флаг, пуста ли таблица записей файлов, которые были успешно выгружены в хранилище до ошибки</returns>
+        public bool CheckTempTableEntriesCount()
 		{
 			try
 			{

@@ -10,63 +10,64 @@ namespace NextCloudFileUploader
 	static class Program
 	{
 		/// <summary>
-		/// Логин на NextCloud
+		/// Логин на NextCloud.
 		/// </summary>
 		private static string _userName = "";
 		/// <summary>
-		/// Пароль от аккаунта на NextCloud
+		/// Пароль от аккаунта на NextCloud.
 		/// </summary>
 		private static string _password = "";
 		/// <summary>
-		/// Сущности
+		/// Сущности.
 		/// </summary>
 		private static readonly string[] Entities = { "Account", "Contact", "Contract" };
 		/// <summary>
-		/// Список файлов
+		/// Список файлов.
 		/// </summary>
 		private static List<File> _fileList = new List<File>();
 		/// <summary>
-		/// Список файлов
+		/// Список файлов.
 		/// </summary>
 		private static List<string> _folderList = new List<string>();
 		/// <summary>
-		/// Адрес удаленного хранилища
+		/// Адрес удаленного хранилища.
 		/// </summary>
 		private const string ServerUrl = "https://cloud.rozetka.ua/remote.php/webdav/";
 		/// <summary>
-		/// Имя сервера базы
+		/// Имя сервера базы.
 		/// </summary>
 		private static string _dbServerName = "";
 		/// <summary>
-		/// Имя базы
+		/// Имя базы.
 		/// </summary>
 		private static string _initialCatalog = "";
 		/// <summary>
-		/// Строка соединения с базой данных
+		/// Строка соединения с базой данных.
 		/// </summary>
 		private static string _сonnectionString = "";
 		/// <summary>
-		/// Провайдер WebDav
+		/// Провайдер WebDav.
 		/// </summary>
 		private static WebDavProvider _webDavProvider;
 		/// <summary>
-		/// Сервис работы с папками
+		/// Сервис работы с папками.
 		/// </summary>
 		private static FolderService _folderService;
 		/// <summary>
-		/// Сервис работы с файлами
+		/// Сервис работы с файлами.
 		/// </summary>
 		private static FileService _fileService;
 		/// <summary>
-		/// Удалять ли временные записи удачно загруженных файлов
+		/// Удалять ли временные записи удачно загруженных файлов.
 		/// </summary>
 		private static bool _clearTempTableAfterSuccess;
+        /// <summary>
+        /// Сохранить ли все выгруженные файлы во временную таблицу.
+        /// </summary>
+        private static bool _saveAllUploadedFilesToTempTable;
 
-		public const string Top = "top(3)";   // TODO: Убрать в проде
+        public const string Top = "top(3)";   // TODO: Убрать в проде
 
-		/// <summary>
-		/// The main entry point for the application.
-		/// </summary>
 		[STAThread]
 		static void Main()
 		{
@@ -84,15 +85,21 @@ namespace NextCloudFileUploader
 			{
 				_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
 				_folderService = new FolderService(_webDavProvider);
-				_fileService = new FileService(_webDavProvider, new SqlConnection(_сonnectionString));
+
+				var dbConnection = new SqlConnection(_сonnectionString);
+				_fileService = new FileService(_webDavProvider, dbConnection);
 
 				if (_fileService.CheckTempTableEntriesCount())
 					AskUserToClearTempTableOrNot();
 
 				FillFileList(Stopwatch.StartNew());
 				FillFolderList();
+
+				if (_fileList.Count > 0)
+					AskUserToSaveAllUploadedFilesToTempTableOrNot();
 				
 				CreateFoldersAndUploadFiles(Stopwatch.StartNew()).Wait();
+
 				Console.Write("Нажмите ENTER для завершения программы.");
 				Console.ReadLine();
 			}
@@ -115,7 +122,7 @@ namespace NextCloudFileUploader
 				watch.Stop();
 				Console.WriteLine($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
 				watch.Restart();
-				await _fileService.UploadFiles(_fileList, _clearTempTableAfterSuccess);
+				await _fileService.UploadFiles(_fileList, _clearTempTableAfterSuccess, _saveAllUploadedFilesToTempTable);
 				watch.Stop();
 				var filesTotalSize = 0;
 				_fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
@@ -169,7 +176,7 @@ namespace NextCloudFileUploader
 			while (true)
 			{
 				_dbServerName = Console.ReadLine();
-				if (!string.IsNullOrEmpty(_dbServerName) && _dbServerName.Length > +3)
+				if (!string.IsNullOrEmpty(_dbServerName) && _dbServerName.Length >= 3)
 				{
 					Console.WriteLine();
 					break;
@@ -278,10 +285,44 @@ namespace NextCloudFileUploader
 			}
 		}
 
-		/// <summary>
-		/// Строит строку соединения с базой данных.
+        /// <summary>
+		/// Спрашивает пользователя, записывать ли данные удачно выгруженных файлов во временную таблицу.
 		/// </summary>
-		private static void BuildConnectionString()
+		private static void AskUserToSaveAllUploadedFilesToTempTableOrNot()
+        {
+            Console.WriteLine("Сохранить данные всех выгруженных в NextCloud файлов во временную таблцу?");
+            Console.WriteLine("Это упростит процесс выгрузки при следующем запуске.");
+            while (true)
+            {
+                Console.Write("Введите 'Y' или 'N': ");
+                var positionTop = Console.CursorTop;
+                var answer = Console.ReadKey();
+                switch (answer.Key)
+                {
+                    case ConsoleKey.Y:
+                        _saveAllUploadedFilesToTempTable = true;
+                        Console.WriteLine();
+                        Console.WriteLine("Данные будут записаны.");
+                        Console.WriteLine();
+                        break;
+                    case ConsoleKey.N:
+                        _saveAllUploadedFilesToTempTable = false;
+                        Console.WriteLine();
+                        Console.WriteLine("Данные не будут записаны.");
+                        Console.WriteLine();
+                        break;
+                    default:
+                        ClearConsoleLine(positionTop);
+                        continue;
+                }
+                break;
+            }
+        }
+
+        /// <summary>
+        /// Строит строку соединения с базой данных.
+        /// </summary>
+        private static void BuildConnectionString()
 		{
 			_сonnectionString = $"Data Source={ _dbServerName };Initial Catalog={ _initialCatalog };Trusted_Connection=True;";
 		}
