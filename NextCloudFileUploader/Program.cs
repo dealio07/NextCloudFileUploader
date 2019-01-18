@@ -44,7 +44,7 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Строка соединения с базой данных
 		/// </summary>
-		private static readonly string СonnectionString = $"Data Source={_dbServerName};Initial Catalog={_initialCatalog};Trusted_Connection=True;";
+		private static string _сonnectionString = "";
 		/// <summary>
 		/// Провайдер WebDav
 		/// </summary>
@@ -62,7 +62,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static bool _clearTempTableAfterSuccess;
 
-		public const string Top = "top(10)";   // TODO: Убрать в проде
+		public const string Top = "top(3)";   // TODO: Убрать в проде
 
 		/// <summary>
 		/// The main entry point for the application.
@@ -78,35 +78,33 @@ namespace NextCloudFileUploader
 				AskUserForName();
 			if (string.IsNullOrEmpty(_password))
 				AskUserForPassword();
+			BuildConnectionString();
 			
 			try
 			{
 				_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
 				_folderService = new FolderService(_webDavProvider);
-				_fileService = new FileService(_webDavProvider, new SqlConnection(СonnectionString));
+				_fileService = new FileService(_webDavProvider, new SqlConnection(_сonnectionString));
 
 				if (_fileService.CheckTempTableEntriesCount())
 					AskUserToClearTempTableOrNot();
 
-				FillFileList();
+				FillFileList(Stopwatch.StartNew());
 				FillFolderList();
 				
 				CreateFoldersAndUploadFiles(Stopwatch.StartNew()).Wait();
+				Console.Write("Нажмите ENTER для завершения программы.");
+				Console.ReadLine();
 			}
 			catch (Exception ex)
 			{
 				ExceptionHandler.LogExceptionToConsole(ex);
 				throw;
 			}
-			finally
-			{
-				Console.ReadLine();
-			}
 		}
 
-
 		/// <summary>
-		/// Создает папки и загружает в них файлы
+		/// Создает папки и выгружает в них файлы
 		/// </summary>
 		/// <param name="watch">Таймер</param>
 		private static async Task CreateFoldersAndUploadFiles(Stopwatch watch)
@@ -115,14 +113,15 @@ namespace NextCloudFileUploader
 			{
 				await _folderService.CreateFoldersFromGroupedList(_folderList);
 				watch.Stop();
-				Console.WriteLine($"[ Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ]");
+				Console.WriteLine($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
 				watch.Restart();
 				await _fileService.UploadFiles(_fileList, _clearTempTableAfterSuccess);
 				watch.Stop();
 				var filesTotalSize = 0;
 				_fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
-				Console.WriteLine($"[ Файлы загружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ]");
-				Console.WriteLine($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):###.##} МБ <<<");
+				Console.WriteLine($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
+				Console.WriteLine($">>> Файлы успешно выгружены <<<");
+				Console.WriteLine($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<{Environment.NewLine}");
 			}
 			catch (Exception ex)
 			{
@@ -149,15 +148,53 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Заполняет список файлов.
 		/// </summary>
-		private static void FillFileList()
+		private static void FillFileList(Stopwatch watch)
 		{
 			Console.WriteLine("1. Получаем файлы из базы");
 			foreach (var entity in Entities)
 			{
 				_fileList.AddRange(_fileService.GetFilesFromDb(entity));
 			}
+			watch.Stop();
+			Console.WriteLine($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
+		}
 
-			Console.WriteLine("1. Файлы получены");
+		/// <summary>
+		/// Спрашивает у пользователя название сервера базы данных.
+		/// </summary>
+		private static void AskForDbServerName()
+		{
+			Console.WriteLine("Введите название сервера базы данных:");
+			var positionTop = Console.CursorTop;
+			while (true)
+			{
+				_dbServerName = Console.ReadLine();
+				if (!string.IsNullOrEmpty(_dbServerName) && _dbServerName.Length > +3)
+				{
+					Console.WriteLine();
+					break;
+				}
+				ClearConsoleLine(positionTop);
+			}
+		}
+
+		/// <summary>
+		/// Спрашивает у пользователя название базы данных (каталога).
+		/// </summary>
+		private static void AskForInitialCatalog()
+		{
+			Console.WriteLine("Введите название базы данных (каталога):");
+			var positionTop = Console.CursorTop;
+			while (true)
+			{
+				_initialCatalog = Console.ReadLine();
+				if (!string.IsNullOrEmpty(_initialCatalog) && _initialCatalog.Length >= 3)
+				{
+					Console.WriteLine();
+					break;
+				}
+				ClearConsoleLine(positionTop);
+			}
 		}
 
 		/// <summary>
@@ -165,16 +202,17 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForName()
 		{
+			Console.WriteLine("Введите имя учетной записи:");
+			var positionTop = Console.CursorTop;
 			while (true)
 			{
-				Console.Write("Введите имя учетной записи:");
 				_userName = Console.ReadLine();
-				if (!string.IsNullOrEmpty(_userName))
+				if (!string.IsNullOrEmpty(_userName) && _userName.Length >= 3)
 				{
 					Console.WriteLine();
 					break;
 				}
-				Console.Write("\r");
+				ClearConsoleLine(positionTop);
 			}
 		}
 
@@ -183,16 +221,26 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserForPassword()
 		{
+			var firstLine = "Введите пароль:";
+			var errorLine = "(пароль не должен быть короче 6 символов)";
+			Console.WriteLine(firstLine);
+			var positionTop = Console.CursorTop;
 			while (true)
 			{
-				Console.Write("Введите пароль:");
 				_password = Utils.ReadAndMaskInputPassword();
-				if (!string.IsNullOrEmpty(_password))
+				if (!string.IsNullOrEmpty(_password) && _password.Length >= 6)
 				{
-					Console.WriteLine();
+					Console.SetCursorPosition(firstLine.Length - 1, positionTop - 1);
+					Console.Write(":");
+					Console.Write(new string(' ', Console.WindowWidth));
+					Console.SetCursorPosition(0, positionTop);
+					Console.Write(new string('*', _password.Length));
+					Console.WriteLine(Environment.NewLine);
 					break;
 				}
-				Console.Write("\r");
+				Console.SetCursorPosition(firstLine.Length - 1, positionTop - 1);
+				Console.Write($" {errorLine}:");
+				ClearConsoleLine(positionTop);
 			}
 		}
 
@@ -205,20 +253,25 @@ namespace NextCloudFileUploader
 
 			while (true)
 			{
-				Console.Write("Ввести '+' или '-': ");
+				Console.Write("Введите 'Y' или 'N': ");
+				var positionTop = Console.CursorTop;
 				var answer = Console.ReadKey();
 				switch (answer.Key)
 				{
-					case ConsoleKey.Add:
+					case ConsoleKey.Y:
 						_clearTempTableAfterSuccess = true;
 						Console.WriteLine();
+						Console.WriteLine("Таблица будет очищена.");
+						Console.WriteLine();
 						break;
-					case ConsoleKey.Subtract:
+					case ConsoleKey.N:
 						_clearTempTableAfterSuccess = false;
+						Console.WriteLine();
+						Console.WriteLine("Таблица не будет очищена.");
 						Console.WriteLine();
 						break;
 					default:
-						Console.Write("\r");
+						ClearConsoleLine(positionTop);
 						continue;
 				}
 				break;
@@ -226,39 +279,22 @@ namespace NextCloudFileUploader
 		}
 
 		/// <summary>
-		/// Спрашивает у пользователя название сервера базы данных
+		/// Строит строку соединения с базой данных.
 		/// </summary>
-		private static void AskForDbServerName()
+		private static void BuildConnectionString()
 		{
-			while (true)
-			{
-				Console.Write("Введите название сервера базы данных:");
-				_dbServerName = Console.ReadLine();
-				if (!string.IsNullOrEmpty(_dbServerName))
-				{
-					Console.WriteLine();
-					break;
-				}
-				Console.Write("\r");
-			}
+			_сonnectionString = $"Data Source={ _dbServerName };Initial Catalog={ _initialCatalog };Trusted_Connection=True;";
 		}
 
 		/// <summary>
-		/// Спрашивает у пользователя название базы данных (каталога)
+		/// Очищает строку консоли
 		/// </summary>
-		private static void AskForInitialCatalog()
+		/// <param name="linePositionTop">Порядковый номер строки</param>
+		private static void ClearConsoleLine(int linePositionTop)
 		{
-			while (true)
-			{
-				Console.Write("Введите название базы данных (каталога):");
-				_initialCatalog = Console.ReadLine();
-				if (!string.IsNullOrEmpty(_initialCatalog))
-				{
-					Console.WriteLine();
-					break;
-				}
-				Console.Write("\r");
-			}
+			Console.SetCursorPosition(0, linePositionTop);
+			Console.Write(new string(' ', Console.WindowWidth));
+			Console.SetCursorPosition(0, linePositionTop);
 		}
 	}
 }

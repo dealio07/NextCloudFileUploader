@@ -51,7 +51,7 @@ namespace NextCloudFileUploader
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 					if (result.StatusCode == HttpStatusCode.Created)
 					{
-						Utils.ShowPercentProgress("3. Загружаем файлы", currentIndex, total);
+						Utils.ShowPercentProgress("3. Выгружаем файлы", currentIndex, total);
 					}
 
 					return true;
