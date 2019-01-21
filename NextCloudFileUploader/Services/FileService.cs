@@ -24,22 +24,24 @@ namespace NextCloudFileUploader
         /// Выгружает файлы в хранилище.
         /// </summary>
         /// <param name="fileList">Список файлов, которые следует выгрузить</param>
-        /// <param name="clearTempTableAfter">Флаг, указывающий на необходимость очисти временной таблицы после удачной выгрузки</param>
         /// /// <param name="saveDataAboutUploadedFiles">Флаг, указывающий на необходимость сохранить данные об успешно выгруженных файлах во временную таблицу</param>
-        public async Task<bool> UploadFiles(IEnumerable<EntityFile> fileList, bool clearTempTableAfter, bool saveDataAboutUploadedFiles)
+        /// /// <param name="totalBytes">Объем всех файлов в байтах</param>
+        public async Task<bool> UploadFiles(IEnumerable<EntityFile> fileList, bool saveDataAboutUploadedFiles, long totalBytes)
 		{
 			var files = fileList.ToList();
 			var current = 0;
+			var uploadedBytes = 0;
 
 			foreach (var file in files)
 			{
 				try
 				{
-					var result = await _webDavProvider.PutWithHttp(file, current, files.Count);
+					uploadedBytes += file.Data.Length;
+					var result = await _webDavProvider.PutWithHttp(file, current, files.Count, uploadedBytes, totalBytes);
 				}
 				catch (Exception ex)
 				{
-					SaveLoadedFilesToTempTable(file, files);
+					PrepareForSavingLoadedFiles(file, files);
 					ExceptionHandler.LogExceptionToConsole(ex);
 					throw ex;
 				}
@@ -49,15 +51,8 @@ namespace NextCloudFileUploader
 				}
 			}
 
-			if (clearTempTableAfter && !saveDataAboutUploadedFiles)
-				DeleteFilesFromTempTable();
-            if (saveDataAboutUploadedFiles && !clearTempTableAfter)
-                SaveAllLoadedFilesToTempTable(files);
-			if (clearTempTableAfter && saveDataAboutUploadedFiles)
-			{
-				DeleteFilesFromTempTable();
-				SaveAllLoadedFilesToTempTable(files);
-			}
+            if (saveDataAboutUploadedFiles)
+				PrepareForSavingAllLoadedFiles(files);
 
 			return true;
 		}
@@ -211,7 +206,7 @@ namespace NextCloudFileUploader
         }
 
         /// <summary>
-        /// Проверяет наличие записей в таблице файлов, которые были успешно выгружены в хранилище до ошибки.
+        /// Проверяет наличие записей в таблице файлов, которые были успешно выгружены в хранилище.
         /// </summary>
         /// <returns>Возвращает флаг, пуста ли таблица записей файлов, которые были успешно выгружены в хранилище до ошибки</returns>
         public bool CheckTempTableEntriesCount()
@@ -240,7 +235,7 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Очищает таблицу записей удачно выгруженных файлов.
 		/// </summary>
-		private void DeleteFilesFromTempTable()
+		internal void DeleteFilesFromTempTable()
 		{
 			try
 			{
@@ -260,6 +255,43 @@ namespace NextCloudFileUploader
 			{
 				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
 			}
+		}
+
+		/// <summary>
+		/// Проверяет размер списка файлов и вызывает метод SaveLoadedFilesToTempTable для выполнения Insert частями,
+		/// если размер списка больше 500 элементов.
+		/// </summary>
+		/// <param name="entityFile">Последний выгруженный файл</param>
+		/// <param name="fileList">Список файлов</param>
+		private void PrepareForSavingLoadedFiles(EntityFile entityFile, List<EntityFile> fileList)
+		{
+			if (500 <= fileList.Count)
+			{
+				var lists = Utils.SplitList(fileList, 500);
+				foreach (var list in lists)
+				{
+					SaveLoadedFilesToTempTable(entityFile, list);
+				}
+			}
+			else SaveLoadedFilesToTempTable(entityFile, fileList);
+		}
+		
+		/// <summary>
+		/// Проверяет размер списка файлов и вызывает метод SaveAllLoadedFilesToTempTable для выполнения Insert частями,
+		/// если размер списка больше 500 элементов.
+		/// </summary>
+		/// <param name="fileList">Список файлов</param>
+		private void PrepareForSavingAllLoadedFiles(List<EntityFile> fileList)
+		{
+			if (500 <= fileList.Count)
+			{
+				var lists = Utils.SplitList(fileList, 500);
+				foreach (var list in lists)
+				{
+					SaveAllLoadedFilesToTempTable(list);
+				}
+			}
+			else SaveAllLoadedFilesToTempTable(fileList);
 		}
 	}
 }

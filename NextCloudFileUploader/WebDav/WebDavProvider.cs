@@ -26,7 +26,9 @@ namespace NextCloudFileUploader
 		/// <param name="entityFile">Выгружаемый файл</param>
 		/// <param name="currentIndex">Индекс данного выгружаемого файла среди всех выгружаемых файлов</param>
 		/// <param name="total">Количество выгружаемых файлов</param>
-		public async Task<bool> PutWithHttp(EntityFile entityFile, int currentIndex, int total)
+		/// <param name="processedBytes">Отправлено байт</param>
+		/// <param name="totalBytes">Общее количество байт</param>
+		public async Task<bool> PutWithHttp(EntityFile entityFile, int currentIndex, int total, long processedBytes, long totalBytes)
 		{
 			if (entityFile?.Data == null || !(entityFile.FolderNames?.Count > 0)) return false;
 			try
@@ -49,7 +51,7 @@ namespace NextCloudFileUploader
 						};
 
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
-					Utils.ShowPercentProgress("3. Выгружаем файлы", currentIndex, total);
+					Utils.ShowPercentProgress("3. Выгружаем файлы", currentIndex, total, processedBytes, totalBytes);
 
 					return true;
 				}

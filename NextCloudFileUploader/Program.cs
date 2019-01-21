@@ -66,10 +66,42 @@ namespace NextCloudFileUploader
         /// </summary>
         private static bool _saveAllUploadedFilesToTempTable;
 
-        public const string Top = "top(3)";   // TODO: Убрать в проде
+        public const string Top = "top(1000)";   // TODO: Убрать в проде
 
 		[STAThread]
 		static void Main()
+		{
+			PrepareUploader();
+
+			try
+			{
+				_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
+				_folderService = new FolderService(_webDavProvider);
+
+				var dbConnection = new SqlConnection(_сonnectionString);
+				_fileService = new FileService(_webDavProvider, dbConnection);
+
+				AskUserToClearTempTableOrNot();
+				TryClearTempTable();
+				FillFileList(Stopwatch.StartNew());
+				FillFolderList();
+				AskUserToSaveAllUploadedFilesToTempTableOrNot();
+				CreateFoldersAndUploadFiles(Stopwatch.StartNew()).Wait();
+				
+				Console.Write("Нажмите ENTER для завершения программы.");
+				Console.ReadLine();
+			}
+			catch (Exception ex)
+			{
+				ExceptionHandler.LogExceptionToConsole(ex);
+				throw;
+			}
+		}
+
+		/// <summary>
+		/// Заполняет основные данные для соединения с базой данных и хранилищем.
+		/// </summary>
+		private static void PrepareUploader()
 		{
 			if (string.IsNullOrEmpty(_dbServerName))
 				AskForDbServerName();
@@ -80,34 +112,6 @@ namespace NextCloudFileUploader
 			if (string.IsNullOrEmpty(_password))
 				AskUserForPassword();
 			BuildConnectionString();
-			
-			try
-			{
-				_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
-				_folderService = new FolderService(_webDavProvider);
-
-				var dbConnection = new SqlConnection(_сonnectionString);
-				_fileService = new FileService(_webDavProvider, dbConnection);
-
-				if (_fileService.CheckTempTableEntriesCount())
-					AskUserToClearTempTableOrNot();
-
-				FillFileList(Stopwatch.StartNew());
-				FillFolderList();
-
-				if (_fileList.Count > 0)
-					AskUserToSaveAllUploadedFilesToTempTableOrNot();
-				
-				CreateFoldersAndUploadFiles(Stopwatch.StartNew()).Wait();
-
-				Console.Write("Нажмите ENTER для завершения программы.");
-				Console.ReadLine();
-			}
-			catch (Exception ex)
-			{
-				ExceptionHandler.LogExceptionToConsole(ex);
-				throw;
-			}
 		}
 
 		/// <summary>
@@ -122,11 +126,14 @@ namespace NextCloudFileUploader
 				watch.Stop();
 				Console.WriteLine($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
 				watch.Restart();
-				await _fileService.UploadFiles(_fileList, _clearTempTableAfterSuccess, _saveAllUploadedFilesToTempTable);
-				watch.Stop();
+				
 				var filesTotalSize = 0;
 				_fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
+				
+				await _fileService.UploadFiles(_fileList, _saveAllUploadedFilesToTempTable, filesTotalSize);
+				watch.Stop();
 				Console.WriteLine($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
+				
 				Console.WriteLine($">>> Файлы успешно выгружены <<<");
 				Console.WriteLine($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<{Environment.NewLine}");
 			}
@@ -256,7 +263,10 @@ namespace NextCloudFileUploader
 		/// </summary>
 		private static void AskUserToClearTempTableOrNot()
 		{
-			Console.WriteLine("В таблице удачно выгруженных файлов имеются записи. Очистить?");
+			if (!_fileService.CheckTempTableEntriesCount()) return;
+			
+			Console.WriteLine("В таблице удачно выгруженных файлов имеются записи.");
+			Console.WriteLine("Очистить таблицу и выполнить полную выборку?");
 
 			while (true)
 			{
@@ -285,11 +295,22 @@ namespace NextCloudFileUploader
 			}
 		}
 
+		/// <summary>
+		/// Очищает временную таблицу по желанию пользователя.
+		/// </summary>
+		private static void TryClearTempTable()
+		{
+			if (_clearTempTableAfterSuccess)
+				_fileService.DeleteFilesFromTempTable();
+		}
+
         /// <summary>
 		/// Спрашивает пользователя, записывать ли данные удачно выгруженных файлов во временную таблицу.
 		/// </summary>
 		private static void AskUserToSaveAllUploadedFilesToTempTableOrNot()
-        {
+		{
+			if (_fileList == null || _fileList.Count == 0) return;
+			
             Console.WriteLine("Сохранить данные всех выгруженных в NextCloud файлов во временную таблцу?");
             Console.WriteLine("Это упростит процесс выгрузки при следующем запуске.");
             while (true)
