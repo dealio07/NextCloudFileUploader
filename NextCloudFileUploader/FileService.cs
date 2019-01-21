@@ -115,6 +115,7 @@ namespace NextCloudFileUploader
 				if ((_dbConnection.State & ConnectionState.Open) == 0)
 					_dbConnection.Open();
 
+				var counter = 0;
 				var values = " VALUES";
 				var loadedFiles = new List<File>();
 				var lastFileIndex = fileList.FindIndex(f => f.Entity == file.Entity
@@ -128,11 +129,11 @@ namespace NextCloudFileUploader
 
 				foreach (var f in loadedFiles)
 				{
-					if (!string.IsNullOrEmpty(f.Entity) && !string.IsNullOrEmpty(f.EntityId) && !string.IsNullOrEmpty(f.FileId) && !string.IsNullOrEmpty(f.Version))
-					{
-						values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', @Data{f.Entity}{f.EntityId}{f.FileId}),";
-						dbCommand.Parameters.Add(new SqlParameter($"@Data{f.Entity}{f.EntityId}{f.FileId}", SqlDbType.VarBinary) { Value = f.Data });
-					}
+					if (string.IsNullOrEmpty(f.Entity) || string.IsNullOrEmpty(f.EntityId) ||
+					    string.IsNullOrEmpty(f.FileId) || string.IsNullOrEmpty(f.Version)) continue;
+
+					values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', @Data{counter}),";
+					dbCommand.Parameters.Add(new SqlParameter($"@Data{counter}", SqlDbType.VarBinary) { Value = f.Data });
 				}
 
 				var valuesWithoutLastComma = values.Remove(values.Length - 1, 1);
@@ -170,17 +171,19 @@ namespace NextCloudFileUploader
                 if ((_dbConnection.State & ConnectionState.Open) == 0)
                     _dbConnection.Open();
 
+	            var counter = 0;
                 var values = " VALUES";
 
 				var dbCommand = _dbConnection.CreateCommand();
 
 				foreach (var f in fileList)
                 {
-                    if (!string.IsNullOrEmpty(f.Entity) && !string.IsNullOrEmpty(f.EntityId) && !string.IsNullOrEmpty(f.FileId) && !string.IsNullOrEmpty(f.Version))
-                    {
-                        values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', @Data{f.Entity}{f.EntityId}{f.FileId}),";
-						dbCommand.Parameters.Add(new SqlParameter($"@Data{f.Entity}{f.EntityId}{f.FileId}", SqlDbType.VarBinary) { Value = f.Data });
-					}
+	                if (string.IsNullOrEmpty(f.Entity) || string.IsNullOrEmpty(f.EntityId) ||
+	                    string.IsNullOrEmpty(f.FileId) || string.IsNullOrEmpty(f.Version)) continue;
+
+	                values += $" ('{f.Entity}', '{f.EntityId}', '{f.FileId}', '{f.Version}', @Data{counter}),";
+	                dbCommand.Parameters.Add(new SqlParameter($"@Data{counter}", SqlDbType.VarBinary) { Value = f.Data });
+	                counter++;
                 }
 
                 var valuesWithoutLastComma = values.Remove(values.Length - 1, 1);
