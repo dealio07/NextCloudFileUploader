@@ -1,2 +1,2 @@
 # NextCloudFileUploader
-## Загрузчик файлов из MSSQL на NextCloud через протокол WebDav
+## Выгрузчик файлов из MSSQL в NextCloud через протокол WebDav
