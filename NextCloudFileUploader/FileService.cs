@@ -26,7 +26,7 @@ namespace NextCloudFileUploader
         /// <param name="fileList">Список файлов, которые следует выгрузить</param>
         /// <param name="clearTempTableAfter">Флаг, указывающий на необходимость очисти временной таблицы после удачной выгрузки</param>
         /// /// <param name="saveDataAboutUploadedFiles">Флаг, указывающий на необходимость сохранить данные об успешно выгруженных файлах во временную таблицу</param>
-        public async Task<bool> UploadFiles(IEnumerable<File> fileList, bool clearTempTableAfter, bool saveDataAboutUploadedFiles)
+        public async Task<bool> UploadFiles(IEnumerable<EntityFile> fileList, bool clearTempTableAfter, bool saveDataAboutUploadedFiles)
 		{
 			var files = fileList.ToList();
 			var current = 0;
@@ -67,7 +67,7 @@ namespace NextCloudFileUploader
 		/// </summary>
 		/// <param name="entity">Название сущности</param>
 		/// <returns>Возвращает файлы для выгрузки в хранилище</returns>
-		public IEnumerable<File> GetFilesFromDb(string entity)
+		public IEnumerable<EntityFile> GetFilesFromDb(string entity)
 		{
 			try
 			{
@@ -90,7 +90,7 @@ namespace NextCloudFileUploader
 						(f.{entity}Id not in (SELECT EntityId FROM [dbo].[LastFileUploadedToNextCloud] WHERE EntityId = f.{entity}Id AND FileId = f.Id AND Version = f.Version))
 						ORDER BY f.CreatedOn";
 
-				return _dbConnection.Query<File>(cmdSqlCommand).ToList();
+				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();
 			}
 			catch (Exception ex)
 			{
@@ -106,9 +106,9 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Сохраняет данные файлов, которые были успешно выгружены в хранилище до ошибки.
 		/// </summary>
-		/// <param name="file">Последний выгруженный файл</param>
+		/// <param name="entityFile">Последний выгруженный файл</param>
 		/// <param name="fileList">Список файлов</param>
-		private void SaveLoadedFilesToTempTable(File file, List<File> fileList)
+		private void SaveLoadedFilesToTempTable(EntityFile entityFile, List<EntityFile> fileList)
 		{
 			try
 			{
@@ -117,11 +117,11 @@ namespace NextCloudFileUploader
 
 				var counter = 0;
 				var values = " VALUES";
-				var loadedFiles = new List<File>();
-				var lastFileIndex = fileList.FindIndex(f => f.Entity == file.Entity
-											 && f.EntityId == file.EntityId
-											 && f.FileId == file.FileId
-											 && f.Version == file.Version);
+				var loadedFiles = new List<EntityFile>();
+				var lastFileIndex = fileList.FindIndex(f => f.Entity == entityFile.Entity
+											 && f.EntityId == entityFile.EntityId
+											 && f.FileId == entityFile.FileId
+											 && f.Version == entityFile.Version);
 				if (lastFileIndex > 0)
 					loadedFiles = fileList.GetRange(0, lastFileIndex);
 
@@ -164,7 +164,7 @@ namespace NextCloudFileUploader
 		/// Сохраняет данные всех файлов, которые были успешно выгружены в хранилище.
 		/// </summary>
 		/// <param name="fileList">Список всех файлов</param>
-		private void SaveAllLoadedFilesToTempTable(List<File> fileList)
+		private void SaveAllLoadedFilesToTempTable(List<EntityFile> fileList)
         {
             try
             {

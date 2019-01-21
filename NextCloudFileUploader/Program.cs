@@ -24,7 +24,7 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Список файлов.
 		/// </summary>
-		private static List<File> _fileList = new List<File>();
+		private static List<EntityFile> _fileList = new List<EntityFile>();
 		/// <summary>
 		/// Список файлов.
 		/// </summary>

@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace NextCloudFileUploader
 {
-	public class File
+	public class EntityFile
 	{
 		public string Entity { get; }
 		public string EntityId { get; }
@@ -13,17 +13,17 @@ namespace NextCloudFileUploader
 		public byte[] Data { get; }
 		public List<string> FolderNames { get; }
 
-		public File(string entity, string entityId, string fileId, string version, byte[] data)
+		public EntityFile(string entity, string entityId, string fileId, string version, byte[] data)
 		{
 			Entity = entity;
 			EntityId = entityId;
 			FileId = fileId;
 			Version = version;
 			Data = data;
-			FolderNames = SplitFolderName(GetRemoteFolderPath());
+			FolderNames = SplitFolderName($"{entity}/{entityId}/{fileId}/");
 		}
 
-		public File(string entity, Guid entityId, Guid fileId, int version, byte[] data)
+		public EntityFile(string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{
 			Entity = entity; 
 			EntityId = entityId.ToString();

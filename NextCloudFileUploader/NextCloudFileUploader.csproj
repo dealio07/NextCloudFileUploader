@@ -55,7 +55,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ExceptionHandler.cs" />
-    <Compile Include="File.cs" />
+    <Compile Include="EntityFile.cs" />
     <Compile Include="FileService.cs" />
     <Compile Include="FolderService.cs" />
     <Compile Include="Program.cs" />
