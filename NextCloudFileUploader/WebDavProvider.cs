@@ -23,12 +23,12 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Помещает файл в файловое хранилище.
 		/// </summary>
-		/// <param name="file">Выгружаемый файл</param>
+		/// <param name="entityFile">Выгружаемый файл</param>
 		/// <param name="currentIndex">Индекс данного выгружаемого файла среди всех выгружаемых файлов</param>
 		/// <param name="total">Количество выгружаемых файлов</param>
-		public async Task<bool> PutWithHttp(File file, int currentIndex, int total)
+		public async Task<bool> PutWithHttp(EntityFile entityFile, int currentIndex, int total)
 		{
-			if (file?.Data == null || !(file.FolderNames?.Count > 0)) return false;
+			if (entityFile?.Data == null || !(entityFile.FolderNames?.Count > 0)) return false;
 			try
 			{
 				using (var handler = new HttpClientHandler { Credentials = new NetworkCredential(UserName, Password), PreAuthenticate = true })
@@ -36,15 +36,15 @@ namespace NextCloudFileUploader
 				{
 
 					var requestMessage =
-						new HttpRequestMessage(HttpMethod.Put, new Uri(ServerUrl + file.GetRemotePath()))
+						new HttpRequestMessage(HttpMethod.Put, new Uri(ServerUrl + entityFile.GetRemotePath()))
 						{
-							Content = new ByteArrayContent(file.Data),
+							Content = new ByteArrayContent(entityFile.Data),
 							Version = HttpVersion.Version11,
 							Headers =
 							{
 								{HttpRequestHeader.Translate.ToString(), "f" },
 								{HttpRequestHeader.ContentType.ToString(), "application/octet-stream" },
-								{HttpRequestHeader.ContentLength.ToString(), file.Data.ToString() }
+								{HttpRequestHeader.ContentLength.ToString(), entityFile.Data.ToString() }
 							}
 						};
 
