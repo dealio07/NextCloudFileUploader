@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace NextCloudFileUploader
+namespace NextCloudFileUploader.Utilities
 {
 	public class Utils
 	{

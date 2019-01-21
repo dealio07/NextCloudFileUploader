@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NextCloudFileUploader
+namespace NextCloudFileUploader.Utilities
 {
 	public class ExceptionHandler
 	{

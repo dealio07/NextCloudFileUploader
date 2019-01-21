@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NextCloudFileUploader.Utilities;
+using NextCloudFileUploader.WebDav;
 
-namespace NextCloudFileUploader
+namespace NextCloudFileUploader.Services
 {
 	public class FolderService
 	{

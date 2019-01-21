@@ -6,8 +6,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
+using NextCloudFileUploader.Entities;
+using NextCloudFileUploader.Utilities;
+using NextCloudFileUploader.WebDav;
 
-namespace NextCloudFileUploader
+namespace NextCloudFileUploader.Services
 {
 	public class FileService
 	{

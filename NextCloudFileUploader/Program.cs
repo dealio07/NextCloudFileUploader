@@ -4,6 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Data.SqlClient;
 using System.Diagnostics;
+using NextCloudFileUploader.Entities;
+using NextCloudFileUploader.Services;
+using NextCloudFileUploader.Utilities;
+using NextCloudFileUploader.WebDav;
 
 namespace NextCloudFileUploader
 {

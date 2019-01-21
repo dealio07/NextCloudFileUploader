@@ -1,4 +1,5 @@
 using System;
+using NextCloudFileUploader.Entities;
 using Xunit;
 
 namespace NextCloudFileUploader.Test

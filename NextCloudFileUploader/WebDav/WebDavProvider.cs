@@ -2,8 +2,10 @@
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using NextCloudFileUploader.Entities;
+using NextCloudFileUploader.Utilities;
 
-namespace NextCloudFileUploader
+namespace NextCloudFileUploader.WebDav
 {
 	public class WebDavProvider
 	{
