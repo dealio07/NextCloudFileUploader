@@ -66,7 +66,11 @@ namespace NextCloudFileUploader
         /// </summary>
         private static bool _saveAllUploadedFilesToTempTable;
 
-        public const string Top = "top(1000)";   // TODO: Убрать в проде
+		#if DEBUG
+			public const string Top = "top(1000)";
+		#else
+			public const string Top = "";
+		#endif
 
 		[STAThread]
 		static void Main()
