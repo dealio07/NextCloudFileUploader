@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Xunit;
 
 namespace NextCloudFileUploader.Test
@@ -15,7 +14,7 @@ namespace NextCloudFileUploader.Test
 
 			Assert.NotNull(file);
 			Assert.NotNull(file.Entity);
-			Assert.True(file.Entity.Equals("AccountFile"));
+			Assert.Equal("AccountFile", file.Entity);
 			Assert.NotNull(file.EntityId);
 			Assert.False(Guid.Empty == Guid.Parse(file.EntityId));
 			Assert.NotNull(file.FileId);
@@ -36,7 +35,7 @@ namespace NextCloudFileUploader.Test
 
 			Assert.NotNull(file);
 			Assert.NotNull(file.Entity);
-			Assert.True(file.Entity.Equals("AccountFile"));
+			Assert.Equal("AccountFile", file.Entity);
 			Assert.NotNull(file.EntityId);
 			Assert.False(Guid.Empty == Guid.Parse(file.EntityId));
 			Assert.NotNull(file.FileId);
@@ -62,7 +61,7 @@ namespace NextCloudFileUploader.Test
 			Assert.NotNull(file.EntityId);
 			Assert.NotNull(file.FileId);
 			Assert.NotNull(file.Version);
-			Assert.Equal(remotePath, $"AccountFile/{entityId}/{fileId}/1");
+			Assert.Equal($"AccountFile/{entityId}/{fileId}/1", remotePath);
 		}
 
 		[Fact]
@@ -78,7 +77,7 @@ namespace NextCloudFileUploader.Test
 			Assert.NotNull(file.Entity);
 			Assert.NotNull(file.EntityId);
 			Assert.NotNull(file.FileId);
-			Assert.Equal(remoteFolderPath, $"AccountFile/{entityId}/{fileId}/");
+			Assert.Equal($"AccountFile/{entityId}/{fileId}/", remoteFolderPath);
 		}
 
 		[Fact]
@@ -91,9 +90,9 @@ namespace NextCloudFileUploader.Test
 			Assert.NotNull(file);
 			Assert.NotNull(file.FolderNames);
 			Assert.NotEmpty(file.FolderNames);
-			Assert.Equal(file.FolderNames[0], "AccountFile");
-			Assert.Equal(file.FolderNames[1], entityId.ToString());
-			Assert.Equal(file.FolderNames[2], fileId.ToString());
+			Assert.Equal("AccountFile", file.FolderNames[0]);
+			Assert.Equal(entityId.ToString(), file.FolderNames[1]);
+			Assert.Equal(fileId.ToString(), file.FolderNames[2]);
 		}
 	}
 }
