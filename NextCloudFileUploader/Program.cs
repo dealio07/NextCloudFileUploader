@@ -79,10 +79,10 @@ namespace NextCloudFileUploader
 		[STAThread]
 		static void Main()
 		{
-			PrepareUploader();
-
 			try
 			{
+				PrepareUploader();
+				
 				_webDavProvider = new WebDavProvider(ServerUrl, _userName, _password);
 				_folderService = new FolderService(_webDavProvider);
 
