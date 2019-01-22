@@ -91,10 +91,10 @@ namespace NextCloudFileUploader
 
 				AskUserToClearTempTableOrNot();
 				TryClearTempTable();
-				FillFileList(Stopwatch.StartNew());
+				FillFileList();
 				FillFolderList();
 				AskUserToSaveAllUploadedFilesToTempTableOrNot();
-				CreateFoldersAndUploadFiles(Stopwatch.StartNew()).Wait();
+				CreateFoldersAndUploadFiles().Wait();
 				
 				Console.Write("Нажмите ENTER для завершения программы.");
 				Console.ReadLine();
@@ -125,11 +125,11 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Создает папки и выгружает в них файлы
 		/// </summary>
-		/// <param name="watch">Таймер</param>
-		private static async Task CreateFoldersAndUploadFiles(Stopwatch watch)
+		private static async Task CreateFoldersAndUploadFiles()
 		{
 			try
 			{
+				var watch = Stopwatch.StartNew();
 				await _folderService.CreateFoldersFromGroupedList(_folderList);
 				watch.Stop();
 				Console.WriteLine($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
@@ -170,8 +170,9 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Заполняет список файлов.
 		/// </summary>
-		private static void FillFileList(Stopwatch watch)
+		private static void FillFileList()
 		{
+			var watch = Stopwatch.StartNew();
 			Console.WriteLine("1. Получаем файлы из базы");
 			foreach (var entity in Entities)
 			{
