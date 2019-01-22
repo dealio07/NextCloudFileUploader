@@ -320,7 +320,7 @@ namespace NextCloudFileUploader
 		{
 			if (_fileList == null || _fileList.Count == 0) return;
 			
-            Console.WriteLine("Сохранить данные всех выгруженных в NextCloud файлов во временную таблцу?");
+            Console.WriteLine("Сохранить данные всех выгруженных в NextCloud файлов во временную таблицу?");
             Console.WriteLine("Это упростит процесс выгрузки при следующем запуске.");
             while (true)
             {
