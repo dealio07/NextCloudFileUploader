@@ -15,7 +15,7 @@ namespace NextCloudFileUploader
 	public static class Program
 	{
 		#if DEBUG
-			public const string Top = "top(1000)";
+			public const string Top = "top(3)";
 		#else
 			public const string Top = "";
 		#endif
@@ -33,7 +33,7 @@ namespace NextCloudFileUploader
 				// Сущности.
 				var entities = appConfig["entities"].Split(',');
 
-				var webDavProvider = new WebDavProvider(appConfig["serverUrl"], appConfig["nextCloudUserName"], appConfig["password"]);
+				var webDavProvider = new WebDavProvider(appConfig["serverUrl"], appConfig["nextCloudUserName"], appConfig["nextCloudPassword"]);
 				var folderService = new FolderService(webDavProvider);
 				var dbConnection = new SqlConnection(сonnectionString);
 				var fileService = new FileService(webDavProvider, dbConnection);

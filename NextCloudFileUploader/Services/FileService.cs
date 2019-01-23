@@ -70,19 +70,30 @@ namespace NextCloudFileUploader.Services
 
 				var cmdSqlCommand = "";
 				if (entity.Equals("Account") || entity.Equals("Contact"))
-					cmdSqlCommand =
-						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', f.Version, f.Data FROM [dbo].[{entity}File] f 
-						WITH (NOLOCK) 
-						WHERE f.{entity}Id is not null AND f.Id is not null AND f.Data is not null AND
-						(f.{entity}Id not in (SELECT EntityId FROM [dbo].[LastFileUploadedToNextCloud] WHERE EntityId = f.{entity}Id AND FileId = f.Id AND Version = f.Version))
-						ORDER BY f.CreatedOn";
+					cmdSqlCommand = 
+							$@"SELECT {Program.Top} d.Number, d.Entity, d.EntityId, d.FileId, d.Version, f.Data FROM [dbo].[DODocuments] d
+								WITH (NOLOCK)
+								INNER JOIN [dbo].[{entity}File] f ON f.Id = d.FileId
+								WHERE f.{entity}Id = d.EntityId
+									AND d.Version = f.Version
+									AND d.Entity = '{entity}File'
+									AND d.EntityId is not null 
+									AND d.FileId is not null 
+									AND f.Data is not null 
+								ORDER BY d.Number;";
 				if (entity.Equals("Contract"))
-					cmdSqlCommand =
-						$@"SELECT {Program.Top} '{entity}File' as Entity, f.{entity}Id as 'EntityId', f.Id as 'FileId', fv.PTVersion as 'Version', fv.PTData as 'Data' FROM [dbo].[{entity}File] f, [dbo].[PTFileVersion] fv 
-						WITH (NOLOCK) 
-						WHERE fv.PTFile = f.Id AND f.{entity}Id is not null AND f.Id is not null AND f.Data is not null AND 
-						(f.{entity}Id not in (SELECT EntityId FROM [dbo].[LastFileUploadedToNextCloud] WHERE EntityId = f.{entity}Id AND FileId = f.Id AND Version = f.Version))
-						ORDER BY f.CreatedOn";
+					cmdSqlCommand = 
+							$@"SELECT {Program.Top} d.Number, d.Entity, d.EntityId, d.FileId, d.Version, fv.PTData as 'Data' FROM [dbo].[DODocuments] d 
+								WITH (NOLOCK)
+								INNER JOIN [dbo].[PTFileVersion] fv ON fv.PTFile = d.FileId
+									AND d.Version = fv.PTVersion
+								INNER JOIN [dbo].[{entity}File] cf ON cf.{entity}Id = d.EntityId
+								WHERE fv.PTFile = cf.Id
+									AND d.Entity = '{entity}File'
+									AND d.EntityId is not null 
+									AND d.FileId is not null 
+									AND cf.Data is not null 
+								ORDER BY d.Number;";
 
 				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();
 			}

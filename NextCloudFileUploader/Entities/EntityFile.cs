@@ -6,6 +6,7 @@ namespace NextCloudFileUploader.Entities
 {
 	public class EntityFile
 	{
+		public string Number { get; }
 		public string Entity { get; }
 		public string EntityId { get; }
 		public string FileId { get; }
@@ -13,8 +14,9 @@ namespace NextCloudFileUploader.Entities
 		public byte[] Data { get; }
 		public List<string> FolderNames { get; }
 
-		public EntityFile(string entity, string entityId, string fileId, string version, byte[] data)
+		public EntityFile(string number, string entity, string entityId, string fileId, string version, byte[] data)
 		{
+			Number = number;
 			Entity = entity;
 			EntityId = entityId;
 			FileId = fileId;
@@ -23,14 +25,15 @@ namespace NextCloudFileUploader.Entities
 			FolderNames = SplitFolderName($"{entity}/{entityId}/{fileId}/");
 		}
 
-		public EntityFile(string entity, Guid entityId, Guid fileId, int version, byte[] data)
+		public EntityFile(int number, string entity, string entityId, string fileId, int version, byte[] data)
 		{
+			Number = number.ToString();
 			Entity = entity; 
-			EntityId = entityId.ToString();
-			FileId = fileId.ToString();
+			EntityId = entityId;
+			FileId = fileId;
 			Version = version.ToString();
 			Data = data;
-			FolderNames = SplitFolderName(GetRemoteFolderPath());
+			FolderNames = SplitFolderName($"{entity}/{entityId}/{fileId}/");
 		}
 
 		public string GetRemotePath()

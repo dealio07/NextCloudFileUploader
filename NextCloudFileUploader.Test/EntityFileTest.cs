@@ -9,9 +9,9 @@ namespace NextCloudFileUploader.Test
 		[Fact]
 		public void Creates()
 		{
-			var entityId = Guid.NewGuid();
-			var fileId   = Guid.NewGuid();
-			var file     = new EntityFile("AccountFile", entityId, fileId, 1, new byte[] {0});
+			var entityId = Guid.NewGuid().ToString();
+			var fileId   = Guid.NewGuid().ToString();
+			var file     = new EntityFile(1, "AccountFile", entityId, fileId, 1, new byte[] {0});
 
 			Assert.NotNull(file);
 			Assert.NotNull(file.Entity);
@@ -32,7 +32,7 @@ namespace NextCloudFileUploader.Test
 		{
 			var entityId = Guid.NewGuid().ToString();
 			var fileId   = Guid.NewGuid().ToString();
-			var file     = new EntityFile("AccountFile", entityId, fileId, "1", new byte[] {0});
+			var file     = new EntityFile("1", "AccountFile", entityId, fileId, "1", new byte[] {0});
 
 			Assert.NotNull(file);
 			Assert.NotNull(file.Entity);
@@ -51,9 +51,9 @@ namespace NextCloudFileUploader.Test
 		[Fact]
 		public void CreatesRemotePath()
 		{
-			var entityId = Guid.NewGuid();
-			var fileId   = Guid.NewGuid();
-			var file     = new EntityFile("AccountFile", entityId, fileId, 1, new byte[] {0});
+			var entityId = Guid.NewGuid().ToString();
+			var fileId   = Guid.NewGuid().ToString();
+			var file     = new EntityFile(1, "AccountFile", entityId, fileId, 1, new byte[] {0});
 
 			var remotePath = file.GetRemotePath();
 			
@@ -68,9 +68,9 @@ namespace NextCloudFileUploader.Test
 		[Fact]
 		public void CreatesRemoteFolderPath()
 		{
-			var entityId = Guid.NewGuid();
-			var fileId   = Guid.NewGuid();
-			var file     = new EntityFile("AccountFile", entityId, fileId, 1, new byte[] {0});
+			var entityId = Guid.NewGuid().ToString();
+			var fileId   = Guid.NewGuid().ToString();
+			var file     = new EntityFile(1, "AccountFile", entityId, fileId, 1, new byte[] {0});
 
 			var remoteFolderPath = file.GetRemoteFolderPath();
 			
@@ -84,16 +84,16 @@ namespace NextCloudFileUploader.Test
 		[Fact]
 		public void SplitsFolderName()
 		{
-			var entityId = Guid.NewGuid();
-			var fileId   = Guid.NewGuid();
-			var file     = new EntityFile("AccountFile", entityId, fileId, 1, new byte[] {0});
+			var entityId = Guid.NewGuid().ToString();
+			var fileId   = Guid.NewGuid().ToString();
+			var file     = new EntityFile(1, "AccountFile", entityId, fileId, 1, new byte[] {0});
 
 			Assert.NotNull(file);
 			Assert.NotNull(file.FolderNames);
 			Assert.NotEmpty(file.FolderNames);
 			Assert.Equal("AccountFile", file.FolderNames[0]);
-			Assert.Equal(entityId.ToString(), file.FolderNames[1]);
-			Assert.Equal(fileId.ToString(), file.FolderNames[2]);
+			Assert.Equal(entityId, file.FolderNames[1]);
+			Assert.Equal(fileId, file.FolderNames[2]);
 		}
 	}
 }
