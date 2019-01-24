@@ -75,7 +75,7 @@ namespace NextCloudFileUploader.Services
 				var cmdSqlCommand = "";
 				if (entity.Equals("Account") || entity.Equals("Contact"))
 					cmdSqlCommand = 
-							$@"SELECT {Program.Top} d.Number, d.Entity, d.EntityId, d.FileId, d.Version, f.Data FROM [dbo].[DODocuments] d
+							/*$@"SELECT {Program.Top} d.Number, d.Entity, d.EntityId, d.FileId, d.Version, f.Data FROM [dbo].[DODocuments] d
 								WITH (NOLOCK)
 								INNER JOIN [dbo].[{entity}File] f ON f.Id = d.FileId
 								WHERE f.{entity}Id = d.EntityId
@@ -85,10 +85,33 @@ namespace NextCloudFileUploader.Services
 									AND d.FileId is not null 
 									AND f.Data is not null 
 									AND d.Number >= {fromNumber.ToString()}
-								ORDER BY d.Number;";
+								ORDER BY d.Number;"*/
+							$@"DECLARE @total INT = 0;
+							   SELECT @total = COUNT(*) FROM [dbo].[DODocuments] d WHERE d.Entity = 'AccountFile';
+							   DECLARE @num INT = 0;
+							   SELECT TOP(1) @num = d.Number FROM [dbo].[DODocuments] d WHERE d.Entity = 'AccountFile';
+							   IF (@total < @num)
+							   BEGIN
+								   SET @total = @num + 1
+							   END
+							   WHILE (@num < @total)
+							   BEGIN
+							   SELECT TOP(100) d.Number, d.Entity, d.EntityId, d.FileId, d.Version, af.Data FROM [dbo].[DODocuments] d
+								   WITH (NOLOCK)
+								   INNER JOIN [dbo].[AccountFile] af ON af.Id = d.FileId
+								   WHERE af.AccountId = d.EntityId
+									   AND d.Version = af.Version
+									   AND d.Entity = 'AccountFile'
+									   AND d.EntityId is not null 
+									   AND d.FileId is not null 
+									   AND af.Data is not null
+									   AND d.Number >= @num
+								   ORDER BY d.Number ASC;
+								   SET @num += 100;
+							   END";
 				if (entity.Equals("Contract"))
 					cmdSqlCommand = 
-							$@"SELECT {Program.Top} d.Number, d.Entity, d.EntityId, d.FileId, d.Version, fv.PTData as 'Data' FROM [dbo].[DODocuments] d 
+							/*$@"SELECT {Program.Top} d.Number, d.Entity, d.EntityId, d.FileId, d.Version, fv.PTData as 'Data' FROM [dbo].[DODocuments] d 
 								WITH (NOLOCK)
 								INNER JOIN [dbo].[PTFileVersion] fv ON fv.PTFile = d.FileId
 									AND d.Version = fv.PTVersion
@@ -100,7 +123,31 @@ namespace NextCloudFileUploader.Services
 									AND d.FileId is not null 
 									AND cf.Data is not null 
 									AND d.Number >= {fromNumber.ToString()}
-								ORDER BY d.Number;";
+								ORDER BY d.Number;"*/
+							$@"DECLARE @total INT = 0;
+								SELECT @total = COUNT(*) FROM [dbo].[DODocuments] d WHERE d.Entity = 'ContractFile';
+								DECLARE @num INT = 0;
+								SELECT TOP(1) @num = d.Number FROM [dbo].[DODocuments] d WHERE d.Entity = 'ContractFile';
+								IF (@total < @num)
+								BEGIN
+									SET @total = @num + 1
+								END
+								WHILE (@num < @total)
+								BEGIN
+									SELECT TOP(100) d.Number, d.Entity, d.EntityId, d.FileId, d.Version, fv.PTData FROM [dbo].[DODocuments] d WITH (NOLOCK)
+										INNER JOIN [dbo].[PTFileVersion] fv ON fv.PTFile = d.FileId
+											AND d.Version = fv.PTVersion
+										INNER JOIN [dbo].[ContractFile] cf ON cf.ContractId = d.EntityId
+										WHERE fv.PTFile = cf.Id
+											AND d.Version = fv.PTVersion
+											AND d.Entity = 'ContractFile'
+											AND d.EntityId is not null 
+											AND d.FileId is not null 
+											AND cf.Data is not null
+											AND d.Number >= @num
+										ORDER BY d.Number ASC;
+										SET @num += 100;
+								END";
 
 				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();
 			}
