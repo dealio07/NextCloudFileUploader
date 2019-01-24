@@ -60,8 +60,10 @@ namespace NextCloudFileUploader.Services
 		/// Выбирает из базы все файлы по имени сущности за исключением файлов, загруженных при предыдущем запуске.
 		/// </summary>
 		/// <param name="entity">Название сущности</param>
+		/// <param name="fromNumber">Порядковый номер записи, номер файла в таблице,
+		/// с которого будет произведена выборка</param>
 		/// <returns>Возвращает файлы для выгрузки в хранилище</returns>
-		public IEnumerable<EntityFile> GetFilesFromDb(string entity)
+		public IEnumerable<EntityFile> GetFilesFromDb(string entity, int fromNumber)
 		{
 			try
 			{
@@ -80,6 +82,7 @@ namespace NextCloudFileUploader.Services
 									AND d.EntityId is not null 
 									AND d.FileId is not null 
 									AND f.Data is not null 
+									AND d.Number >= {fromNumber}
 								ORDER BY d.Number;";
 				if (entity.Equals("Contract"))
 					cmdSqlCommand = 
@@ -89,10 +92,12 @@ namespace NextCloudFileUploader.Services
 									AND d.Version = fv.PTVersion
 								INNER JOIN [dbo].[{entity}File] cf ON cf.{entity}Id = d.EntityId
 								WHERE fv.PTFile = cf.Id
+									AND d.Version = fv.PTVersion
 									AND d.Entity = '{entity}File'
 									AND d.EntityId is not null 
 									AND d.FileId is not null 
 									AND cf.Data is not null 
+									AND d.Number >= {fromNumber}
 								ORDER BY d.Number;";
 
 				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();

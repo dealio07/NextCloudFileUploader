@@ -38,13 +38,7 @@ namespace NextCloudFileUploader
 				var dbConnection = new SqlConnection(сonnectionString);
 				var fileService = new FileService(webDavProvider, dbConnection);
 
-				// Список файлов.
-				var fileList = new List<EntityFile>();
-
-				// Список файлов.
-				var folderList = new List<string>();
-
-				var files = GetFileList(entities, fileService).ToList();
+				var files = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
 				var folders = FillFolderList(files).ToList();
 				CreateFoldersAndUploadFiles(fileService, folderService, folders, files).Wait();
 
@@ -78,7 +72,7 @@ namespace NextCloudFileUploader
 				watch.Stop();
 				Console.WriteLine($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
 
-				Console.WriteLine($">>> Файлы успешно выгружены <<<");
+				Console.WriteLine(">>> Файлы успешно выгружены <<<");
 				Console.WriteLine($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<{Environment.NewLine}");
 			}
 			catch (Exception ex)
@@ -108,14 +102,14 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Заполняет список файлов.
 		/// </summary>
-		private static IEnumerable<EntityFile> GetFileList(IEnumerable<string> entities, FileService fileService)
+		private static IEnumerable<EntityFile> GetFileList(IEnumerable<string> entities, FileService fileService, int fromNumber)
 		{
 			var fileList = new List<EntityFile>();
 			var watch = Stopwatch.StartNew();
 			Console.WriteLine("1. Получаем файлы из базы");
 			foreach (var entity in entities)
 			{
-				fileList.AddRange(fileService.GetFilesFromDb(entity));
+				fileList.AddRange(fileService.GetFilesFromDb(entity, fromNumber));
 			}
 			watch.Stop();
 			Console.WriteLine($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
