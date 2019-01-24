@@ -1,24 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
+using log4net;
 
 namespace NextCloudFileUploader.Utilities
 {
-	public class Utils
+	public static class Utils
 	{
+
 		/// <summary>
 		/// Показывает прогресс выполняемого процесса
 		/// </summary>
 		/// <param name="message">Отображаемое сообщение</param>
 		/// <param name="processed">Обработано объектов</param>
 		/// <param name="total">Общее количество объектов</param>
-		public static void ShowPercentProgress(string message, long processed, long total)
+		public static string ShowPercentProgress(string message, long processed, long total)
 		{
 			var percent = 100 * (processed + 1) / total;
 			if (processed >= total - 1 && percent < 100)
 				percent = 100;
-			Console.Write($"\r{message}: {percent : ##0.#}% (выполнено {processed + 1} из {total})");
+			var info = $"{message}: {percent: ##0.#}% (выполнено {processed + 1} из {total})";
+			Console.Write($"\r{message}: {percent: ##0.#}% (выполнено {processed + 1} из {total})");
 			if (processed >= total - 1)
 				Console.Write(Environment.NewLine);
+			return info;
 		}
 		
 		/// <summary>
@@ -29,48 +33,17 @@ namespace NextCloudFileUploader.Utilities
 		/// <param name="total">Общее количество объектов</param>
 		/// <param name="processedByte">Отправлено байт</param>
 		/// <param name="totalBytes">Общее количество байт</param>
-		public static void ShowPercentProgress(string message, long processed, long total, long processedByte, long totalBytes)
+		public static string ShowPercentProgress(string message, long processed, long total, long processedByte, long totalBytes)
 		{
 			var percent = 100 * (processed + 1) / total;
 			if (processed >= total - 1 && percent < 100)
 				percent = 100;
-			Console.Write($"\r{message}: {percent : ##0.#}% (выполнено {processed + 1} из {total} / отправлено {processedByte} из {totalBytes} байт)");
+			var info =
+					$"{message}: {percent: ##0.#}% (выполнено {processed + 1} из {total} / отправлено {processedByte} из {totalBytes} байт)";
+			Console.Write($"\r{message}: {percent: ##0.#}% (выполнено {processed + 1} из {total} / отправлено {processedByte} из {totalBytes} байт)");
 			if (processed >= total - 1)
 				Console.Write(Environment.NewLine);
-		}
-
-		/// <summary>
-		/// Маскирует символы вводимого в консоли пароля символами: "*"
-		/// </summary>
-		/// <returns>Возвращает пароль</returns>
-		public static string ReadAndMaskInputPassword()
-		{
-			var password = "";
-			do
-			{
-				var key = Console.ReadKey(true);
-				// Backspace и Enter не должны срабатывать
-				if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
-				{
-					password += key.KeyChar;
-					Console.Write("*");
-				}
-				else
-				{
-					if (key.Key == ConsoleKey.Backspace && password.Length > 0)
-					{
-						password = password.Substring(0, (password.Length - 1));
-						Console.Write("\b \b");
-					}
-					else if (key.Key == ConsoleKey.Enter)
-					{
-						Console.WriteLine();
-						break;
-					}
-				}
-			} while (true);
-
-			return password;
+			return info;
 		}
 		
 		/// <summary>
@@ -86,6 +59,12 @@ namespace NextCloudFileUploader.Utilities
 			{
 				yield return bigList.GetRange(i, Math.Min(nSize, bigList.Count - i));
 			}
+		}
+
+		public static void LogInfoAndWriteToConsole(string message, ILog log)
+		{
+			Console.WriteLine(message);
+			log.Info(message);
 		}
 	}
 }

@@ -1,14 +1,18 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading.Tasks;
 using NextCloudFileUploader.Entities;
 using NextCloudFileUploader.Utilities;
+using log4net;
 
 namespace NextCloudFileUploader.WebDav
 {
 	public class WebDavProvider
 	{
+		private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+		
 		public string ServerUrl { get; }
 
 		private string UserName;
@@ -53,7 +57,8 @@ namespace NextCloudFileUploader.WebDav
 						};
 
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
-					Utils.ShowPercentProgress("3. Выгружаем файлы", currentIndex, total, processedBytes, totalBytes);
+					Log.Info(Utils.ShowPercentProgress("Выгружаем файлы", currentIndex, total, processedBytes, totalBytes));
+					Log.Info($"Файл: {entityFile.Number} {entityFile.Entity}/{entityFile.EntityId}/{entityFile.FileId}/{entityFile.Version} {entityFile.Data.Length / (1024.0 * 1024.0):####0.###} МБ  {result.StatusCode.ToString()}");
 
 					return true;
 				}
@@ -62,6 +67,7 @@ namespace NextCloudFileUploader.WebDav
 			catch (WebException ex)
 			{
 				Console.WriteLine(ex.Message);
+				Log.Debug(ex);
 				return false;
 			}
 			catch (Exception ex)
@@ -90,7 +96,8 @@ namespace NextCloudFileUploader.WebDav
 				httpMkColRequest.Method = @"MKCOL";
 
 				var result = (HttpWebResponse)await httpMkColRequest.GetResponseAsync();
-				Utils.ShowPercentProgress("2. Создаём папки", currentIndex, total);
+				Log.Info(Utils.ShowPercentProgress("Создаём папки", currentIndex, total));
+				Log.Info($"Папка: {url}/{remoteFolderPath} {result.StatusDescription}");
 
 				return true;
 			}

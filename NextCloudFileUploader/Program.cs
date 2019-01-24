@@ -9,11 +9,16 @@ using NextCloudFileUploader.Utilities;
 using NextCloudFileUploader.WebDav;
 using System.Configuration;
 using System.Linq;
+using System.Reflection;
+using log4net;
+using log4net.Config;
 
 namespace NextCloudFileUploader
 {
 	public static class Program
 	{
+		private static readonly ILog _log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+		
 		#if DEBUG
 			public const string Top = "top(3)";
 		#else
@@ -21,11 +26,12 @@ namespace NextCloudFileUploader
 		#endif
 
 		[STAThread]
-		static void Main()
+		public static void Main()
 		{
 			try
 			{
 				var appConfig = ConfigurationManager.AppSettings;
+				XmlConfigurator.Configure();
 
 				// Строка соединения с БД.
 				var сonnectionString = $"Data Source={ appConfig["dbServerName"] };Initial Catalog={ appConfig["initialCatalog"] };Trusted_Connection=True;";
@@ -38,12 +44,12 @@ namespace NextCloudFileUploader
 				var dbConnection = new SqlConnection(сonnectionString);
 				var fileService = new FileService(webDavProvider, dbConnection);
 
+				Utils.LogInfoAndWriteToConsole("Приложение стартовало.", _log);
 				var files = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
 				var folders = FillFolderList(files).ToList();
 				CreateFoldersAndUploadFiles(fileService, folderService, folders, files).Wait();
 
-				Console.Write("Нажмите ENTER для завершения программы.");
-				Console.ReadLine();
+				Utils.LogInfoAndWriteToConsole($"Приложение закончило работу.{Environment.NewLine}", _log);
 			}
 			catch (Exception ex)
 			{
@@ -62,7 +68,7 @@ namespace NextCloudFileUploader
 				var watch = Stopwatch.StartNew();
 				await folderService.CreateFoldersFromGroupedList(folderList);
 				watch.Stop();
-				Console.WriteLine($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
+				Utils.LogInfoAndWriteToConsole($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", _log);
 				watch.Restart();
 
 				var filesTotalSize = 0;
@@ -70,10 +76,10 @@ namespace NextCloudFileUploader
 
 				await fileService.UploadFiles(fileList, filesTotalSize);
 				watch.Stop();
-				Console.WriteLine($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
+				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", _log);
 
-				Console.WriteLine(">>> Файлы успешно выгружены <<<");
-				Console.WriteLine($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<{Environment.NewLine}");
+				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<", _log);
+				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<", _log);
 			}
 			catch (Exception ex)
 			{
@@ -106,14 +112,16 @@ namespace NextCloudFileUploader
 		{
 			var fileList = new List<EntityFile>();
 			var watch = Stopwatch.StartNew();
-			Console.WriteLine("1. Получаем файлы из базы");
+			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы", _log);
 			foreach (var entity in entities)
 			{
 				fileList.AddRange(fileService.GetFilesFromDb(entity, fromNumber));
 			}
 			watch.Stop();
-			Console.WriteLine($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]{Environment.NewLine}");
+			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", _log);
 			return fileList;
 		}
+		
+		
 	}
 }

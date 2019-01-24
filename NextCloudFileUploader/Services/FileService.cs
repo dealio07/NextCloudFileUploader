@@ -1,19 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 using NextCloudFileUploader.Entities;
 using NextCloudFileUploader.Utilities;
 using NextCloudFileUploader.WebDav;
+using log4net;
 
 namespace NextCloudFileUploader.Services
 {
 	public class FileService
 	{
+		private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 		private WebDavProvider _webDavProvider;
 		private IDbConnection _dbConnection;
 
@@ -43,7 +45,7 @@ namespace NextCloudFileUploader.Services
 				}
 				catch (Exception ex)
 				{
-					// TODO: Добавить логирование при ошибке
+					Log.Error($"Ошибка при выгрузке файла #{file.Number}");
 					ExceptionHandler.LogExceptionToConsole(ex);
 					throw ex;
 				}
@@ -82,7 +84,7 @@ namespace NextCloudFileUploader.Services
 									AND d.EntityId is not null 
 									AND d.FileId is not null 
 									AND f.Data is not null 
-									AND d.Number >= {fromNumber}
+									AND d.Number >= {fromNumber.ToString()}
 								ORDER BY d.Number;";
 				if (entity.Equals("Contract"))
 					cmdSqlCommand = 
@@ -97,7 +99,7 @@ namespace NextCloudFileUploader.Services
 									AND d.EntityId is not null 
 									AND d.FileId is not null 
 									AND cf.Data is not null 
-									AND d.Number >= {fromNumber}
+									AND d.Number >= {fromNumber.ToString()}
 								ORDER BY d.Number;";
 
 				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();

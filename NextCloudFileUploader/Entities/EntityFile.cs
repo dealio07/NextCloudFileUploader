@@ -25,15 +25,15 @@ namespace NextCloudFileUploader.Entities
 			FolderNames = SplitFolderName($"{entity}/{entityId}/{fileId}/");
 		}
 
-		public EntityFile(int number, string entity, string entityId, string fileId, int version, byte[] data)
+		public EntityFile(int number, string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{
 			Number = number.ToString();
 			Entity = entity; 
-			EntityId = entityId;
-			FileId = fileId;
+			EntityId = entityId.ToString();
+			FileId = fileId.ToString();
 			Version = version.ToString();
 			Data = data;
-			FolderNames = SplitFolderName($"{entity}/{entityId}/{fileId}/");
+			FolderNames = SplitFolderName($"{entity}/{entityId.ToString()}/{fileId.ToString()}/");
 		}
 
 		public string GetRemotePath()
@@ -80,7 +80,7 @@ namespace NextCloudFileUploader.Entities
 
 		public override string ToString()
 		{
-			return $"{Entity}: {EntityId},\nFileId: {FileId},\nVersion: {Version},\nData: {Data?.Length}";
+			return $"{Entity}: {EntityId},\nFileId: {FileId},\nVersion: {Version},\nData: {Data?.Length.ToString()}";
 		}
 	}
 }
