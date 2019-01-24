@@ -1,49 +1,29 @@
-IF NOT (EXISTS (
-	SELECT * FROM INFORMATION_SCHEMA.TABLES
-	WHERE TABLE_SCHEMA = 'dbo'
-	AND TABLE_NAME = 'DODocuments'))
-	CREATE TABLE [dbo].[DODocuments] (
-		Number INT IDENTITY (0, 1) PRIMARY KEY NOT NULL, 
-		Entity VARCHAR(50) NOT NULL, 
-		EntityId UNIQUEIDENTIFIER NOT NULL, 
-		FileId UNIQUEIDENTIFIER NOT NULL, 
-		Version INT NOT NULL
-	);
-ELSE 
-	BEGIN
-		DROP TABLE [dbo].[DODocuments];
-		CREATE TABLE [dbo].[DODocuments] (
-			Number INT IDENTITY (0, 1) PRIMARY KEY NOT NULL, 
-			Entity VARCHAR(50) NOT NULL, 
-			EntityId UNIQUEIDENTIFIER NOT NULL, 
-			FileId UNIQUEIDENTIFIER NOT NULL, 
-			Version INT NOT NULL
-		);
-	END
+DROP TABLE IF EXISTS [dbo].[DODocuments];
+CREATE TABLE [dbo].[DODocuments] (
+	Number INT IDENTITY (0, 1) PRIMARY KEY NOT NULL, 
+	Entity VARCHAR(50) NOT NULL, 
+	EntityId UNIQUEIDENTIFIER NOT NULL, 
+	FileId UNIQUEIDENTIFIER NOT NULL, 
+	Version INT NOT NULL
+);
 
-BEGIN
-	BEGIN
-		INSERT INTO [dbo].[DODocuments] (Entity, EntityId, FileId, Version)
-		SELECT 'AccountFile' AS Entity, af.AccountId, af.Id, af.Version FROM [dbo].[AccountFile] af WITH (NOLOCK)
-		WHERE af.AccountId IS NOT NULL AND af.Id IS NOT NULL
-		ORDER BY af.AccountId, af.Id;
-	END
-	BEGIN
-		INSERT INTO [dbo].[DODocuments] (Entity, EntityId, FileId, Version)
-		SELECT 'ContactFile' AS Entity, cf.ContactId, cf.Id, cf.Version FROM [dbo].[ContactFile] cf WITH (NOLOCK)
-		WHERE cf.ContactId IS NOT NULL AND cf.Id IS NOT NULL
-		ORDER BY cf.ContactId, cf.Id;
-	END
-	BEGIN
-		INSERT INTO [dbo].[DODocuments] (Entity, EntityId, FileId, Version)
-		SELECT 'ContractFile' AS Entity, f.ContractId, f.Id, fv.PTVersion FROM [dbo].[ContractFile] f WITH (NOLOCK)
-		INNER JOIN [dbo].[PTFileVersion] fv ON f.ContractId IS NOT NULL 
-											AND f.Id IS NOT NULL 
-											AND fv.PTVersion IS NOT NULL 
-											AND fv.PTFile = f.Id 
-		ORDER BY f.ContractId, f.Id;
-	END
-END;
+INSERT INTO [dbo].[DODocuments] (Entity, EntityId, FileId, Version)
+SELECT 'AccountFile' AS Entity, af.AccountId, af.Id, af.Version FROM [dbo].[AccountFile] af WITH (NOLOCK)
+WHERE af.AccountId IS NOT NULL AND af.Id IS NOT NULL
+ORDER BY af.AccountId, af.Id;
+
+INSERT INTO [dbo].[DODocuments] (Entity, EntityId, FileId, Version)
+SELECT 'ContactFile' AS Entity, cf.ContactId, cf.Id, cf.Version FROM [dbo].[ContactFile] cf WITH (NOLOCK)
+WHERE cf.ContactId IS NOT NULL AND cf.Id IS NOT NULL
+ORDER BY cf.ContactId, cf.Id;
+
+INSERT INTO [dbo].[DODocuments] (Entity, EntityId, FileId, Version)
+SELECT 'ContractFile' AS Entity, f.ContractId, f.Id, fv.PTVersion FROM [dbo].[ContractFile] f WITH (NOLOCK)
+INNER JOIN [dbo].[PTFileVersion] fv ON f.ContractId IS NOT NULL 
+									AND f.Id IS NOT NULL 
+									AND fv.PTVersion IS NOT NULL 
+									AND fv.PTFile = f.Id 
+ORDER BY f.ContractId, f.Id;
 
 ------------------------------------------------------------------------------------------------------------------------
 
