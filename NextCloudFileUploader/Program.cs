@@ -17,7 +17,7 @@ namespace NextCloudFileUploader
 {
 	public static class Program
 	{
-		private static readonly ILog _log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+		private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 		
 		#if DEBUG
 			public const string Top = "top(3)";
@@ -34,27 +34,31 @@ namespace NextCloudFileUploader
 				XmlConfigurator.Configure();
 
 				// Строка соединения с БД.
-				var сonnectionString = $"Data Source={ appConfig["dbServerName"] };Initial Catalog={ appConfig["initialCatalog"] };Trusted_Connection=True;";
+				var сonnectionString =
+						$"Data Source={appConfig["dbServerName"]};Initial Catalog={appConfig["initialCatalog"]};Trusted_Connection=True;";
 
 				// Сущности.
 				var entities = appConfig["entities"].Split(',');
 
-				var webDavProvider = new WebDavProvider(appConfig["serverUrl"], appConfig["nextCloudUserName"], appConfig["nextCloudPassword"]);
+				var webDavProvider = new WebDavProvider(appConfig["serverUrl"], appConfig["nextCloudUserName"],
+														appConfig["nextCloudPassword"]);
 				var folderService = new FolderService(webDavProvider);
-				var dbConnection = new SqlConnection(сonnectionString);
-				var fileService = new FileService(webDavProvider, dbConnection);
+				var dbConnection  = new SqlConnection(сonnectionString);
+				var fileService   = new FileService(webDavProvider, dbConnection);
 
-				Utils.LogInfoAndWriteToConsole("Приложение стартовало.", _log);
-				var files = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
+				Utils.LogInfoAndWriteToConsole("Приложение стартовало.", Log);
+				var files   = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
 				var folders = FillFolderList(files).ToList();
 				CreateFoldersAndUploadFiles(fileService, folderService, folders, files).Wait();
-
-				Utils.LogInfoAndWriteToConsole($"Приложение закончило работу.{Environment.NewLine}", _log);
 			}
 			catch (Exception ex)
 			{
 				ExceptionHandler.LogExceptionToConsole(ex);
 				throw;
+			}
+			finally
+			{
+				Utils.LogInfoAndWriteToConsole($"Приложение завершило работу.{Environment.NewLine}", Log);
 			}
 		}
 
@@ -68,7 +72,7 @@ namespace NextCloudFileUploader
 				var watch = Stopwatch.StartNew();
 				await folderService.CreateFoldersFromGroupedList(folderList);
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", _log);
+				Utils.LogInfoAndWriteToConsole($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
 				watch.Restart();
 
 				var filesTotalSize = 0;
@@ -76,10 +80,10 @@ namespace NextCloudFileUploader
 
 				await fileService.UploadFiles(fileList, filesTotalSize);
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", _log);
+				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
 
-				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<", _log);
-				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<", _log);
+				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<", Log);
+				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<", Log);
 			}
 			catch (Exception ex)
 			{
@@ -112,13 +116,14 @@ namespace NextCloudFileUploader
 		{
 			var fileList = new List<EntityFile>();
 			var watch = Stopwatch.StartNew();
-			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы", _log);
+			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы", Log);
 			foreach (var entity in entities)
 			{
 				fileList.AddRange(fileService.GetFilesFromDb(entity, fromNumber));
 			}
 			watch.Stop();
-			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", _log);
+			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
+			Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов", Log);
 			return fileList;
 		}
 		

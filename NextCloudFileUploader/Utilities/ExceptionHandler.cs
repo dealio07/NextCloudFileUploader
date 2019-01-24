@@ -21,13 +21,9 @@ namespace NextCloudFileUploader.Utilities
 			Log.Error(GetLogMessage(ex));
 		}
 
-		public static string GetLogMessage(Exception ex)
+		private static string GetLogMessage(Exception ex)
 		{
-			return $@"
-			------------------------- Ошибка в {ex.TargetSite.Name} -------------------------{Environment.NewLine}
-			Сообщение ошибки: {Environment.NewLine}{ex.Message}{Environment.NewLine}
-			Стек ошибки: {Environment.NewLine}{ex.StackTrace}
-			------------------------- Ошибка в {ex.TargetSite.Name} -------------------------{Environment.NewLine}";
+			return $"{Environment.NewLine}------------------------- Ошибка в {ex.TargetSite.Name} -------------------------{Environment.NewLine}Сообщение ошибки: {Environment.NewLine}{ex.Message}{Environment.NewLine}Стек ошибки: {Environment.NewLine}{ex.StackTrace}";
 		}
 	}
 }
