@@ -17,8 +17,6 @@ namespace NextCloudFileUploader
 {
 	public static class Program
 	{
-		private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
-
 		[STAThread]
 		public static void Main()
 		{
@@ -40,7 +38,7 @@ namespace NextCloudFileUploader
 				var dbConnection  = new SqlConnection(сonnectionString);
 				var fileService   = new FileService(webDavProvider, dbConnection);
 
-				Utils.LogInfoAndWriteToConsole("Приложение стартовало.", Log);
+				Utils.LogInfoAndWriteToConsole("Приложение стартовало.");
 				var files   = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
 				var folders = FillFolderList(files).ToList();
 				CreateFoldersAndUploadFiles(fileService, folderService, folders, files).Wait();
@@ -52,7 +50,7 @@ namespace NextCloudFileUploader
 			}
 			finally
 			{
-				Utils.LogInfoAndWriteToConsole($"Приложение завершило работу.{Environment.NewLine}", Log);
+				Utils.LogInfoAndWriteToConsole($"Приложение завершило работу.{Environment.NewLine}");
 			}
 		}
 
@@ -66,7 +64,7 @@ namespace NextCloudFileUploader
 				var watch = Stopwatch.StartNew();
 				await folderService.CreateFoldersFromGroupedList(folderList);
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
+				Utils.LogInfoAndWriteToConsole($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
 				watch.Restart();
 
 				var filesTotalSize = 0;
@@ -74,10 +72,10 @@ namespace NextCloudFileUploader
 
 				await fileService.UploadFiles(fileList, filesTotalSize);
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
+				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
 
-				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<", Log);
-				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / 1024.0:####0.######} КБ ({filesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<", Log);
+				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<");
+				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / 1024.0:####0.######} КБ ({filesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<");
 			}
 			catch (Exception ex)
 			{
@@ -110,22 +108,27 @@ namespace NextCloudFileUploader
 		{
 			var fileList = new List<EntityFile>();
 			var watch = Stopwatch.StartNew();
-			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы", Log);
+			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы");
 			foreach (var entity in entities)
 			{
 				var from = fromNumber;
-				var totalFiles = fileService.GetFilesCount(entity);
+				var totalFiles = fileService.GetFilesCount(entity, from.ToString());
 				if (totalFiles < from)
 					totalFiles = from + 1;
 				while (from < totalFiles)
 				{
-					fileList.AddRange(fileService.GetFilesFromDb(entity, from));
-					from += 100;
+					var files = fileService.GetFilesFromDb(entity, from.ToString()).ToList();
+					if (files.Count > 0)
+					{
+						fileList.AddRange(files);
+						from = files[files.Count - 1].Number + 1;
+					}
+					else break;
 				}
 			}
 			watch.Stop();
-			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
-			Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов", Log);
+			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
+			Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов");
 			return fileList;
 		}
 		

@@ -62,17 +62,16 @@ namespace NextCloudFileUploader.Services
 		/// Выбирает из базы все файлы по имени сущности за исключением файлов, загруженных при предыдущем запуске.
 		/// </summary>
 		/// <param name="entity">Название сущности</param>
-		/// <param name="fromNumber">Порядковый номер записи, номер файла в таблице,
+		/// <param name="fromNumber">Порядковый номер файла (номер записи в таблице),
 		/// с которого будет произведена выборка</param>
 		/// <returns>Возвращает файлы для выгрузки в хранилище</returns>
-		public IEnumerable<EntityFile> GetFilesFromDb(string entity, int fromNumber)
+		public IEnumerable<EntityFile> GetFilesFromDb(string entity, string fromNumber)
 		{
 			try
 			{
 				if ((_dbConnection.State & ConnectionState.Open) == 0)
 					_dbConnection.Open();
 
-				var fromString = fromNumber.ToString();
 				var cmdSqlCommand = "";
 				if (entity.Equals("Account") || entity.Equals("Contact"))
 					cmdSqlCommand = 
@@ -84,7 +83,7 @@ namespace NextCloudFileUploader.Services
 									AND d.Version = af.Version
 									AND d.Entity = '{entity}File'
 									AND DATALENGTH(af.Data) > 0
-									AND d.Number >= {fromString}
+									AND d.Number >= {fromNumber}
 								ORDER BY d.Number ASC;";
 				if (entity.Equals("Contract"))
 					cmdSqlCommand = 
@@ -96,7 +95,7 @@ namespace NextCloudFileUploader.Services
 								WHERE d.Version = fv.PTVersion
 									AND d.Entity = '{entity}File'
 									AND DATALENGTH(fv.PTData) > 0
-									AND d.Number >= {fromString}
+									AND d.Number >= {fromNumber}
 								ORDER BY d.Number ASC;";
 
 				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();
@@ -111,20 +110,24 @@ namespace NextCloudFileUploader.Services
 				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
 			}
 		}
-		
+
 		/// <summary>
 		/// Выбирает количество файлов (записей в БД) по сущности
 		/// </summary>
 		/// <param name="entity">Сущность</param>
+		/// <param name="fromNumber">Порядковый номер файла (номер записи в таблице),
+		/// с которого будет произведена выборка</param>
 		/// <returns>Возвращает количество файлов по сущности</returns>
-		public int GetFilesCount(string entity)
+		public int GetFilesCount(string entity, string fromNumber)
 		{
 			try
 			{
 				if ((_dbConnection.State & ConnectionState.Open) == 0)
 					_dbConnection.Open();
 
-				var cmdSqlCommand = $@"SELECT COUNT(*) FROM [dbo].[DODocuments] d WHERE d.Entity = '{entity}File';";
+				var cmdSqlCommand = $@"SELECT COUNT(*) FROM [dbo].[DODocuments] d 
+										WHERE d.Entity = '{entity}File'
+										AND d.Number >= {fromNumber};";
 
 				return _dbConnection.QuerySingle<int>(cmdSqlCommand);
 			}

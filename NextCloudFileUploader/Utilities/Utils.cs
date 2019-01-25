@@ -6,6 +6,7 @@ namespace NextCloudFileUploader.Utilities
 {
 	public static class Utils
 	{
+		private static readonly ILog Log = LogManager.GetLogger("NextCloudFileUploader.Program");
 
 		/// <summary>
 		/// Показывает прогресс выполняемого процесса
@@ -61,10 +62,10 @@ namespace NextCloudFileUploader.Utilities
 			}
 		}
 
-		public static void LogInfoAndWriteToConsole(string message, ILog log)
+		public static void LogInfoAndWriteToConsole(string message)
 		{
 			Console.WriteLine(message);
-			log.Info(message);
+			Log.Info(message);
 		}
 	}
 }

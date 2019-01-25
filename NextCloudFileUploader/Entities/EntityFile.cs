@@ -6,7 +6,7 @@ namespace NextCloudFileUploader.Entities
 {
 	public class EntityFile
 	{
-		public string Number { get; }
+		public int Number { get; }
 		public string Entity { get; }
 		public string EntityId { get; }
 		public string FileId { get; }
@@ -16,8 +16,8 @@ namespace NextCloudFileUploader.Entities
 
 		public EntityFile(int number, string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{
-			Number = number.ToString();
-			Entity = entity; 
+			Number = number;
+			Entity = entity;
 			EntityId = entityId.ToString();
 			FileId = fileId.ToString();
 			Version = version.ToString();
