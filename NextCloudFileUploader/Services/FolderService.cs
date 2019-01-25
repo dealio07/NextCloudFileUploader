@@ -31,7 +31,7 @@ namespace NextCloudFileUploader.Services
 			{
 				try
 				{
-					var result = await _webDavProvider.Mkcol(_webDavProvider.ServerUrl, folderName, current, enumerable.Count);
+					await _webDavProvider.Mkcol(_webDavProvider.ServerUrl, folderName, current, enumerable.Count);
 				}
 				catch (Exception ex)
 				{

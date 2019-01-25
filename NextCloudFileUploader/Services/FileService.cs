@@ -41,7 +41,7 @@ namespace NextCloudFileUploader.Services
 				try
 				{
 					uploadedBytes += file.Data.Length;
-					var result = await _webDavProvider.PutWithHttp(file, current, files.Count, uploadedBytes, totalBytes);
+					await _webDavProvider.PutWithHttp(file, current, files.Count, uploadedBytes, totalBytes);
 				}
 				catch (Exception ex)
 				{
@@ -83,9 +83,7 @@ namespace NextCloudFileUploader.Services
 								WHERE af.{entity}Id = d.EntityId
 									AND d.Version = af.Version
 									AND d.Entity = '{entity}File'
-									AND d.EntityId is not null 
-									AND d.FileId is not null 
-									AND af.Data is not null
+									AND DATALENGTH(af.Data) > 0
 									AND d.Number >= {fromString}
 								ORDER BY d.Number ASC;";
 				if (entity.Equals("Contract"))
@@ -95,13 +93,9 @@ namespace NextCloudFileUploader.Services
 								WITH (NOLOCK)
 								INNER JOIN [dbo].[PTFileVersion] fv ON fv.PTFile = d.FileId
 									AND d.Version = fv.PTVersion
-								INNER JOIN [dbo].[{entity}File] cf ON cf.{entity}Id = d.EntityId
-								WHERE fv.PTFile = cf.Id
-									AND d.Version = fv.PTVersion
+								WHERE d.Version = fv.PTVersion
 									AND d.Entity = '{entity}File'
-									AND d.EntityId is not null 
-									AND d.FileId is not null 
-									AND cf.Data is not null
+									AND DATALENGTH(fv.PTData) > 0
 									AND d.Number >= {fromString}
 								ORDER BY d.Number ASC;";
 
@@ -118,6 +112,11 @@ namespace NextCloudFileUploader.Services
 			}
 		}
 		
+		/// <summary>
+		/// Выбирает количество файлов (записей в БД) по сущности
+		/// </summary>
+		/// <param name="entity">Сущность</param>
+		/// <returns>Возвращает количество файлов по сущности</returns>
 		public int GetFilesCount(string entity)
 		{
 			try
