@@ -58,7 +58,7 @@ namespace NextCloudFileUploader.WebDav
 
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 					Log.Info(Utils.ShowPercentProgress("Выгружаем файлы", currentIndex, total, processedBytes, totalBytes));
-					Log.Info($"Файл: #{entityFile.Number} {entityFile.Entity}/{entityFile.EntityId}/{entityFile.FileId}/{entityFile.Version} {entityFile.Data.Length / (1024.0 * 1024.0):####0.###} МБ  {result.StatusCode.ToString()}");
+					Log.Info($"Файл: #{entityFile.Number} {entityFile.Entity}/{entityFile.EntityId}/{entityFile.FileId}/{entityFile.Version} {entityFile.Data.Length / 1024.0:####0.######} КБ ({entityFile.Data.Length / (1024.0 * 1024.0):####0.######} МБ) {result.StatusCode.ToString()}");
 
 					return true;
 				}

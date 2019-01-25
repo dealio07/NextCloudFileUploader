@@ -18,12 +18,6 @@ namespace NextCloudFileUploader
 	public static class Program
 	{
 		private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
-		
-		#if DEBUG
-			public const string Top = "top(3)";
-		#else
-			public const string Top = "";
-		#endif
 
 		[STAThread]
 		public static void Main()
@@ -83,7 +77,7 @@ namespace NextCloudFileUploader
 				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
 
 				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<", Log);
-				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / (1024.0 * 1024.0):####0.###} МБ <<<", Log);
+				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / 1024.0:####0.######} КБ ({filesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<", Log);
 			}
 			catch (Exception ex)
 			{
@@ -119,7 +113,15 @@ namespace NextCloudFileUploader
 			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы", Log);
 			foreach (var entity in entities)
 			{
-				fileList.AddRange(fileService.GetFilesFromDb(entity, fromNumber));
+				var from = fromNumber;
+				var totalFiles = fileService.GetFilesCount(entity);
+				if (totalFiles < from)
+					totalFiles = from + 1;
+				while (from < totalFiles)
+				{
+					fileList.AddRange(fileService.GetFilesFromDb(entity, from));
+					from += 100;
+				}
 			}
 			watch.Stop();
 			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]", Log);
