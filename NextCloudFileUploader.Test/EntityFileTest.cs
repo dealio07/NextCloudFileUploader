@@ -28,27 +28,6 @@ namespace NextCloudFileUploader.Test
 		}
 
 		[Fact]
-		public void CreatesWithStrings()
-		{
-			var entityId = Guid.NewGuid().ToString();
-			var fileId   = Guid.NewGuid().ToString();
-			var file     = new EntityFile("1", "AccountFile", entityId, fileId, "1", new byte[] {0});
-
-			Assert.NotNull(file);
-			Assert.NotNull(file.Entity);
-			Assert.Equal("AccountFile", file.Entity);
-			Assert.NotNull(file.EntityId);
-			Assert.False(Guid.Empty == Guid.Parse(file.EntityId));
-			Assert.NotNull(file.FileId);
-			Assert.False(Guid.Empty == Guid.Parse(file.FileId));
-			Assert.NotNull(file.Version);
-			Assert.True(file.Version == "1");
-			Assert.NotNull(file.Data);
-			Assert.NotEmpty(file.Data);
-			Assert.True(file.Data.Length == 1);
-		}
-
-		[Fact]
 		public void CreatesRemotePath()
 		{
 			var entityId = Guid.NewGuid();

@@ -14,17 +14,6 @@ namespace NextCloudFileUploader.Entities
 		public byte[] Data { get; }
 		public List<string> FolderNames { get; }
 
-		public EntityFile(string number, string entity, string entityId, string fileId, string version, byte[] data)
-		{
-			Number = number;
-			Entity = entity;
-			EntityId = entityId;
-			FileId = fileId;
-			Version = version;
-			Data = data;
-			FolderNames = SplitFolderName($"{entity}/{entityId}/{fileId}/");
-		}
-
 		public EntityFile(int number, string entity, Guid entityId, Guid fileId, int version, byte[] data)
 		{
 			Number = number.ToString();
