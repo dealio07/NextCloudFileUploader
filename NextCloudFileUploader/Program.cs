@@ -9,8 +9,6 @@ using NextCloudFileUploader.Utilities;
 using NextCloudFileUploader.WebDav;
 using System.Configuration;
 using System.Linq;
-using System.Reflection;
-using log4net;
 using log4net.Config;
 
 namespace NextCloudFileUploader
@@ -26,8 +24,7 @@ namespace NextCloudFileUploader
 				XmlConfigurator.Configure();
 
 				// Строка соединения с БД.
-				var сonnectionString =
-						$"Data Source={appConfig["dbServerName"]};Initial Catalog={appConfig["initialCatalog"]};Trusted_Connection=True;";
+				var сonnectionString = appConfig["connStr"];
 
 				// Сущности.
 				var entities = appConfig["entities"].Split(',');
