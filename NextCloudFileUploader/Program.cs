@@ -39,15 +39,12 @@ namespace NextCloudFileUploader
 				var files   = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
 				var folders = FillFolderList(files).ToList();
 				CreateFoldersAndUploadFiles(fileService, folderService, folders, files).Wait();
+				Utils.LogInfoAndWriteToConsole("Приложение завершило работу.");
 			}
 			catch (Exception ex)
 			{
+				Utils.LogInfoAndWriteToConsole("Приложение завершило работу с ошибкой.");
 				ExceptionHandler.LogExceptionToConsole(ex);
-				throw;
-			}
-			finally
-			{
-				Utils.LogInfoAndWriteToConsole($"Приложение завершило работу.{Environment.NewLine}");
 			}
 		}
 
