@@ -36,9 +36,31 @@ namespace NextCloudFileUploader
 				var fileService   = new FileService(webDavProvider, dbConnection);
 
 				Utils.LogInfoAndWriteToConsole("Приложение стартовало.");
-				var files   = GetFileList(entities, fileService, int.Parse(appConfig["fromNumber"])).ToList();
-				var folders = FillFolderList(files).ToList();
-				CreateFoldersAndUploadFiles(fileService, folderService, folders, files).Wait();
+
+				foreach (var entity in entities)
+				{
+					var from = 0;
+					var totalFiles = fileService.GetFilesCount(entity, @from.ToString());
+					if (totalFiles < from)
+						totalFiles = from + 1;
+					while (from < totalFiles)
+					{
+						var watch = Stopwatch.StartNew();
+						Utils.LogInfoAndWriteToConsole("Получаем файлы из базы");
+						var fileList = fileService.GetFilesFromDb(entity, @from.ToString()).ToList();
+						watch.Stop();
+						watch = null;
+						Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
+						Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов");
+						if (fileList.Count > 0)
+						{
+							var folders = FillFolderList(fileList).ToList();
+							CreateFoldersAndUploadFiles(fileService, folderService, folders, fileList).Wait();
+							from = fileList[fileList.Count - 1].Number + 1;
+						}
+						else break;
+					}
+				}
 				Utils.LogInfoAndWriteToConsole("Приложение завершило работу.");
 			}
 			catch (Exception ex)
@@ -64,7 +86,11 @@ namespace NextCloudFileUploader
 				var filesTotalSize = 0;
 				fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
 
-				await fileService.UploadFiles(fileList, filesTotalSize);
+				var splicedFiles = Utils.SplitList(fileList, 2).ToList();
+				// Вот так
+				splicedFiles.ForEach(async files => await Task.Factory.StartNew(() => fileService.UploadFiles(files, filesTotalSize)));
+				// Или вот так
+				//splicedFiles.ForEach(files => Parallel.ForEach(files, async file => await fileService.UploadFiles(new List<EntityFile>{file}, filesTotalSize)));
 				watch.Stop();
 				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
 
@@ -125,7 +151,5 @@ namespace NextCloudFileUploader
 			Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов");
 			return fileList;
 		}
-		
-		
 	}
 }
