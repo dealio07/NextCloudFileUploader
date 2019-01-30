@@ -32,8 +32,7 @@ namespace NextCloudFileUploader.WebDav
 		/// Помещает файл в файловое хранилище.
 		/// </summary>
 		/// <param name="entityFile">Выгружаемый файл</param>
-		/// <param name="processedBytes">Отправлено байт</param>
-		/// <param name="totalBytes">Общее количество байт</param>
+		/// <param name="allFiles">Все файлы сущности</param>
 		public async Task<bool> PutWithHttp(EntityFile entityFile, IEnumerable<EntityFile> allFiles)
 		{
 			if (entityFile?.Data == null || !(entityFile.FolderNames?.Count > 0)) return false;

@@ -9,7 +9,6 @@ using NextCloudFileUploader.Utilities;
 using NextCloudFileUploader.WebDav;
 using System.Configuration;
 using System.Linq;
-using System.Runtime.Remoting.Messaging;
 using log4net.Config;
 
 namespace NextCloudFileUploader
@@ -35,7 +34,8 @@ namespace NextCloudFileUploader
 														appConfig["nextCloudPassword"]);
 				var folderService = new FolderService(webDavProvider);
 				var dbConnection  = new SqlConnection(сonnectionString);
-				var fileService   = new FileService(webDavProvider, dbConnection);
+				var fileService   = new FileService(webDavProvider);
+				var dbService   = new DBService(dbConnection);
 
 				Utils.LogInfoAndWriteToConsole("Приложение стартовало.");
 
@@ -43,7 +43,7 @@ namespace NextCloudFileUploader
 				foreach (var entity in entities)
 				{
 					var from = int.Parse(appConfig["fromNumber"]);
-					var totalFiles = fileService.GetFilesCount(entity, from.ToString());
+					var totalFiles = dbService.GetFilesCount(entity, from.ToString());
 					var entityFilesTotalSize = 0;
 					if (totalFiles < from)
 						totalFiles = from + 1;
@@ -51,7 +51,7 @@ namespace NextCloudFileUploader
 					{
 						Utils.LogInfoAndWriteToConsole($"Получаем файлы {entity}File из БД");
 						var watch = Stopwatch.StartNew();
-						var fileList = fileService.GetFilesFromDb(entity, from.ToString()).ToList();
+						var fileList = dbService.GetFilesFromDb(entity, from.ToString()).ToList();
 						watch.Stop();
 						if (fileList.Count > 0)
 						{

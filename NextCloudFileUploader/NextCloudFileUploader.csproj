@@ -61,6 +61,7 @@
     <Compile Include="Entities\EntityFile.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\DBService.cs" />
     <Compile Include="Services\FileService.cs" />
     <Compile Include="Services\FolderService.cs" />
     <Compile Include="Utilities\ExceptionHandler.cs" />
@@ -92,7 +93,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="DocumentsInsert.txt" />
-    <Content Include="WebDav\WebDavMethods.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
