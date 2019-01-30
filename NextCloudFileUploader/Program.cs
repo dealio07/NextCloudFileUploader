@@ -40,18 +40,17 @@ namespace NextCloudFileUploader
 				foreach (var entity in entities)
 				{
 					var from = 0;
-					var totalFiles = fileService.GetFilesCount(entity, @from.ToString());
+					var totalFiles = fileService.GetFilesCount(entity, from.ToString());
 					if (totalFiles < from)
 						totalFiles = from + 1;
 					while (from < totalFiles)
 					{
 						var watch = Stopwatch.StartNew();
-						Utils.LogInfoAndWriteToConsole("Получаем файлы из базы");
-						var fileList = fileService.GetFilesFromDb(entity, @from.ToString()).ToList();
+						Utils.LogInfoAndWriteToConsole($"Получаем файлы {entity} из базы");
+						var fileList = fileService.GetFilesFromDb(entity, from.ToString()).ToList();
 						watch.Stop();
-						watch = null;
-						Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
-						Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов");
+						Utils.LogInfoAndWriteToConsole($"[  Файлы {entity} получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
+						Utils.LogInfoAndWriteToConsole($"Получено {fileList.Count.ToString()} файлов {entity}");
 						if (fileList.Count > 0)
 						{
 							var folders = FillFolderList(fileList).ToList();
@@ -80,22 +79,22 @@ namespace NextCloudFileUploader
 				var watch = Stopwatch.StartNew();
 				await folderService.CreateFoldersFromGroupedList(folderList);
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Папки созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
+				Utils.LogInfoAndWriteToConsole($"[  Папки {fileList[0].Entity} созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
 				watch.Restart();
 
 				var filesTotalSize = 0;
 				fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
 
 				var splicedFiles = Utils.SplitList(fileList, 2).ToList();
-				// Вот так
-				splicedFiles.ForEach(async files => await Task.Factory.StartNew(() => fileService.UploadFiles(files, filesTotalSize)));
-				// Или вот так
-				//splicedFiles.ForEach(files => Parallel.ForEach(files, async file => await fileService.UploadFiles(new List<EntityFile>{file}, filesTotalSize)));
+				foreach (var files in splicedFiles)
+				{
+					await fileService.UploadFiles(files, filesTotalSize);
+				}
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Файлы выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
+				Utils.LogInfoAndWriteToConsole($"[  Файлы {fileList[0].Entity} выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
 
-				Utils.LogInfoAndWriteToConsole(">>> Файлы успешно выгружены <<<");
-				Utils.LogInfoAndWriteToConsole($">>> Общий объем файлов: {filesTotalSize / 1024.0:####0.######} КБ ({filesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<");
+				Utils.LogInfoAndWriteToConsole($">>> Файлы {fileList[0].Entity} успешно выгружены <<<");
+				Utils.LogInfoAndWriteToConsole($">>> Объем выгруженных файлов  {fileList[0].Entity}: {filesTotalSize / 1024.0:####0.######} КБ ({filesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<");
 			}
 			catch (Exception ex)
 			{
@@ -119,37 +118,6 @@ namespace NextCloudFileUploader
 			folderList.AddRange(entityFiles.GroupBy(file => (file.Entity, file.EntityId, file.FileId))
 				.Select(grouped => $"{grouped.Key.Entity}/{grouped.Key.EntityId}/{grouped.Key.FileId}"));
 			return folderList;
-		}
-
-		/// <summary>
-		/// Заполняет список файлов.
-		/// </summary>
-		private static IEnumerable<EntityFile> GetFileList(IEnumerable<string> entities, FileService fileService, int fromNumber)
-		{
-			var fileList = new List<EntityFile>();
-			var watch = Stopwatch.StartNew();
-			Utils.LogInfoAndWriteToConsole("Получаем файлы из базы");
-			foreach (var entity in entities)
-			{
-				var from = fromNumber;
-				var totalFiles = fileService.GetFilesCount(entity, from.ToString());
-				if (totalFiles < from)
-					totalFiles = from + 1;
-				while (from < totalFiles)
-				{
-					var files = fileService.GetFilesFromDb(entity, from.ToString()).ToList();
-					if (files.Count > 0)
-					{
-						fileList.AddRange(files);
-						from = files[files.Count - 1].Number + 1;
-					}
-					else break;
-				}
-			}
-			watch.Stop();
-			Utils.LogInfoAndWriteToConsole($"[  Файлы получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
-			Utils.LogInfoAndWriteToConsole($"Всего {fileList.Count.ToString()} файлов");
-			return fileList;
 		}
 	}
 }
