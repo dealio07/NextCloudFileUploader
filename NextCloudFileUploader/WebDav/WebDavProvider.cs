@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
@@ -30,11 +32,9 @@ namespace NextCloudFileUploader.WebDav
 		/// Помещает файл в файловое хранилище.
 		/// </summary>
 		/// <param name="entityFile">Выгружаемый файл</param>
-		/// <param name="currentIndex">Индекс данного выгружаемого файла среди всех выгружаемых файлов</param>
-		/// <param name="total">Количество выгружаемых файлов</param>
 		/// <param name="processedBytes">Отправлено байт</param>
 		/// <param name="totalBytes">Общее количество байт</param>
-		public async Task<bool> PutWithHttp(EntityFile entityFile, int currentIndex, int total, long processedBytes, long totalBytes)
+		public async Task<bool> PutWithHttp(EntityFile entityFile, IEnumerable<EntityFile> allFiles)
 		{
 			if (entityFile?.Data == null || !(entityFile.FolderNames?.Count > 0)) return false;
 			try
@@ -57,8 +57,9 @@ namespace NextCloudFileUploader.WebDav
 						};
 
 					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
-					Log.Info(Utils.ShowPercentProgress("Выгружаем файлы", currentIndex, total, processedBytes, totalBytes));
-					Log.Info($"Файл: #{entityFile.Number} {entityFile.Entity}/{entityFile.EntityId}/{entityFile.FileId}/{entityFile.Version} {entityFile.Data.Length / 1024.0:####0.######} КБ ({entityFile.Data.Length / (1024.0 * 1024.0):####0.######} МБ) {result.StatusCode.ToString()}");
+					var entityFiles = allFiles.ToList();
+					Log.Info(Utils.ShowPercentProgress("Выгружаем файлы", entityFiles.IndexOf(entityFile), entityFiles.Count));
+					Log.Info($"Файл: #{entityFile.Number.ToString()} {entityFile.Entity}/{entityFile.EntityId}/{entityFile.FileId}/{entityFile.Version} {entityFile.Data.Length / 1024.0:####0.######} КБ ({entityFile.Data.Length / (1024.0 * 1024.0):####0.######} МБ) {result.StatusCode.ToString()}");
 
 					return true;
 				}
@@ -103,7 +104,12 @@ namespace NextCloudFileUploader.WebDav
 			}
 			catch (Exception ex)
 			{
-				if (ex.Message.Contains("405")) return false;
+				if (ex.Message.Contains("405"))
+				{
+					Log.Info(Utils.ShowPercentProgress("Создаём папки", currentIndex, total));
+					Log.Info($"Папка: {remoteFolderPath} {ex.Message}");
+					return false;
+				}
 				ExceptionHandler.LogExceptionToConsole(ex);
 				throw ex;
 

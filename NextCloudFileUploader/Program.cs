@@ -9,6 +9,7 @@ using NextCloudFileUploader.Utilities;
 using NextCloudFileUploader.WebDav;
 using System.Configuration;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using log4net.Config;
 
 namespace NextCloudFileUploader
@@ -18,6 +19,7 @@ namespace NextCloudFileUploader
 		[STAThread]
 		public static void Main()
 		{
+			var progWatch = Stopwatch.StartNew();
 			try
 			{
 				var appConfig = ConfigurationManager.AppSettings;
@@ -37,30 +39,41 @@ namespace NextCloudFileUploader
 
 				Utils.LogInfoAndWriteToConsole("Приложение стартовало.");
 
+				var allFolders = new HashSet<string>();
 				foreach (var entity in entities)
 				{
-					var from = 0;
+					var from = int.Parse(appConfig["fromNumber"]);
 					var totalFiles = fileService.GetFilesCount(entity, from.ToString());
+					var entityFilesTotalSize = 0;
 					if (totalFiles < from)
 						totalFiles = from + 1;
 					while (from < totalFiles)
 					{
+						Utils.LogInfoAndWriteToConsole($"Получаем файлы {entity}File из БД");
 						var watch = Stopwatch.StartNew();
-						Utils.LogInfoAndWriteToConsole($"Получаем файлы {entity} из базы");
 						var fileList = fileService.GetFilesFromDb(entity, from.ToString()).ToList();
 						watch.Stop();
-						Utils.LogInfoAndWriteToConsole($"[  Файлы {entity} получены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
-						Utils.LogInfoAndWriteToConsole($"Получено {fileList.Count.ToString()} файлов {entity}");
 						if (fileList.Count > 0)
 						{
+							Utils.LogInfoAndWriteToConsole($"[ Получено {fileList.Count.ToString()} файлов {entity}File за {watch.Elapsed.Hours.ToString()} ч {watch.Elapsed.Minutes.ToString()} м {watch.Elapsed.Seconds.ToString()} с {watch.Elapsed.Milliseconds.ToString()} мс ]");
+							fileList.ToList().ForEach(file => entityFilesTotalSize += file.Data.Length);
 							var folders = FillFolderList(fileList).ToList();
-							CreateFoldersAndUploadFiles(fileService, folderService, folders, fileList).Wait();
+							var notCreatedFolders = folders.Where(folder => !allFolders.Contains(folder)).ToList();
+							CreateFoldersAndUploadFiles(fileService, folderService, notCreatedFolders, fileList).Wait();
+							folders.ForEach(folder => allFolders.Add(folder));
 							from = fileList[fileList.Count - 1].Number + 1;
 						}
-						else break;
+						else
+						{
+							Utils.LogInfoAndWriteToConsole($"[ Получено 0 файлов {entity}File ]");
+							break;
+						}
 					}
+					Utils.LogInfoAndWriteToConsole($">>> Файлы {entity}File успешно выгружены <<<");
+					Utils.LogInfoAndWriteToConsole($">>> Объем выгруженных файлов {entity}File: {entityFilesTotalSize / 1024.0:####0.######} КБ ({entityFilesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<");
 				}
-				Utils.LogInfoAndWriteToConsole("Приложение завершило работу.");
+				progWatch.Stop();
+				Utils.LogInfoAndWriteToConsole($"Приложение успешно завершило работу за {progWatch.Elapsed.Hours.ToString()} ч {progWatch.Elapsed.Minutes.ToString()} м {progWatch.Elapsed.Seconds.ToString()} с {progWatch.Elapsed.Milliseconds.ToString()} мс");
 			}
 			catch (Exception ex)
 			{
@@ -72,29 +85,25 @@ namespace NextCloudFileUploader
 		/// <summary>
 		/// Создает папки и выгружает в них файлы
 		/// </summary>
-		private static async Task CreateFoldersAndUploadFiles(FileService fileService, FolderService folderService, List<string> folderList, List<EntityFile> fileList)
+		private static async Task CreateFoldersAndUploadFiles(FileService fileService, FolderService folderService, IEnumerable<string> folderList, IEnumerable<EntityFile> fileList)
 		{
 			try
 			{
+				var list = fileList.ToList();
 				var watch = Stopwatch.StartNew();
-				await folderService.CreateFoldersFromGroupedList(folderList);
+				var groupedFolderNameList = folderList.ToList();
+				await folderService.CreateFoldersFromGroupedList(groupedFolderNameList);
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Папки {fileList[0].Entity} созданы за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
+				Utils.LogInfoAndWriteToConsole($"[ Создано {groupedFolderNameList.Count.ToString()} папок {list[0].Entity} за {watch.Elapsed.Hours.ToString()} ч {watch.Elapsed.Minutes.ToString()} м {watch.Elapsed.Seconds.ToString()} с {watch.Elapsed.Milliseconds.ToString()} мс ]");
 				watch.Restart();
 
-				var filesTotalSize = 0;
-				fileList.ToList().ForEach(file => filesTotalSize += file.Data.Length);
-
-				var splicedFiles = Utils.SplitList(fileList, 2).ToList();
+				var splicedFiles = Utils.SplitList(list, 2).ToList();
 				foreach (var files in splicedFiles)
 				{
-					await fileService.UploadFiles(files, filesTotalSize);
+					await fileService.UploadFiles(files, list);
 				}
 				watch.Stop();
-				Utils.LogInfoAndWriteToConsole($"[  Файлы {fileList[0].Entity} выгружены за {watch.Elapsed.Hours} ч {watch.Elapsed.Minutes} м {watch.Elapsed.Seconds} с ({watch.Elapsed.Milliseconds} мс) ]");
-
-				Utils.LogInfoAndWriteToConsole($">>> Файлы {fileList[0].Entity} успешно выгружены <<<");
-				Utils.LogInfoAndWriteToConsole($">>> Объем выгруженных файлов  {fileList[0].Entity}: {filesTotalSize / 1024.0:####0.######} КБ ({filesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<");
+				Utils.LogInfoAndWriteToConsole($"[ Выгружено {list.Count.ToString()} файлов {list[0].Entity} за {watch.Elapsed.Hours.ToString()} ч {watch.Elapsed.Minutes.ToString()} м {watch.Elapsed.Seconds.ToString()} с {watch.Elapsed.Milliseconds.ToString()} мс ]");
 			}
 			catch (Exception ex)
 			{

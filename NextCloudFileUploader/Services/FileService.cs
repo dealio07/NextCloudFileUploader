@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,22 +31,20 @@ namespace NextCloudFileUploader.Services
         /// </summary>
         /// <param name="fileList">Список файлов, которые следует выгрузить</param>
         /// /// <param name="totalBytes">Объем всех файлов в байтах</param>
-        public async Task<bool> UploadFiles(IEnumerable<EntityFile> fileList, long totalBytes)
+        public async Task<bool> UploadFiles(IEnumerable<EntityFile> fileList, IEnumerable<EntityFile> allFiles)
 		{
 			var files = fileList.ToList();
 			var current = 0;
-			var uploadedBytes = 0;
 
 			foreach (var file in files)
 			{
 				try
 				{
-					uploadedBytes += file.Data.Length;
-					await _webDavProvider.PutWithHttp(file, current, files.Count, uploadedBytes, totalBytes);
+					await _webDavProvider.PutWithHttp(file, allFiles);
 				}
 				catch (Exception ex)
 				{
-					Log.Error($"Ошибка при выгрузке файла #{file.Number}");
+					Log.Error($"Ошибка при выгрузке файла #{file.Number.ToString()}");
 					ExceptionHandler.LogExceptionToConsole(ex);
 					throw ex;
 				}
