@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
+using DecaTec.WebDav;
 using NextCloudFileUploader.Entities;
 using NextCloudFileUploader.Utilities;
 using log4net;
@@ -17,52 +19,26 @@ namespace NextCloudFileUploader.WebDav
 		
 		public string ServerUrl { get; }
 
-		private string UserName;
-
-		private string Password;
+		private WebDavSession Session;
 
 		public WebDavProvider(string serverUrl, string userName, string password)
 		{
 			ServerUrl = serverUrl;
-			UserName = userName;
-			Password = password;
+			Session = CreateSession(userName, password, serverUrl);
 		}
 
-		/// <summary>
-		/// Помещает файл в файловое хранилище.
-		/// </summary>
-		/// <param name="entityFile">Выгружаемый файл</param>
-		/// <param name="allFiles">Все файлы сущности</param>
-		public async Task<bool> PutWithHttp(EntityFile entityFile, IEnumerable<EntityFile> allFiles)
+		// Помещает файл в файловое хранилище.
+		public async Task<bool> PutWithHttp(EntityFile entityFile)
 		{
-			if (entityFile?.Data == null || !(entityFile.FolderNames?.Count > 0)) return false;
+			if (entityFile?.Data == null) return false;
 			try
 			{
-				using (var handler = new HttpClientHandler { Credentials = new NetworkCredential(UserName, Password), PreAuthenticate = true })
-				using (var client = new HttpClient(handler) { BaseAddress = new Uri(ServerUrl) })
-				{
-
-					var requestMessage =
-						new HttpRequestMessage(HttpMethod.Put, new Uri(ServerUrl + entityFile.GetRemotePath()))
-						{
-							Content = new ByteArrayContent(entityFile.Data),
-							Version = HttpVersion.Version11,
-							Headers =
-							{
-								{HttpRequestHeader.Translate.ToString(), "f" },
-								{HttpRequestHeader.ContentType.ToString(), "application/octet-stream" },
-								{HttpRequestHeader.ContentLength.ToString(), entityFile.Data.ToString() }
-							}
-						};
-
-					var result = await client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
-					var entityFiles = allFiles.ToList();
-					Log.Info(Utils.ShowPercentProgress("Выгружаем файлы", entityFiles.IndexOf(entityFile), entityFiles.Count));
-					Log.Info($"Файл: #{entityFile.Number.ToString()} {entityFile.Entity}/{entityFile.EntityId}/{entityFile.FileId}/{entityFile.Version} {entityFile.Data.Length / 1024.0:####0.######} КБ ({entityFile.Data.Length / (1024.0 * 1024.0):####0.######} МБ) {result.StatusCode.ToString()}");
-
-					return true;
+				using (var stream = new MemoryStream(entityFile.Data)) {
+					await Session.UploadFileAsync(entityFile.GetRemotePath(), stream);
 				}
+				Log.Info($@"Файл: #{entityFile.Number.ToString()} {entityFile.GetRemotePath()} {entityFile.Data.Length / 1024.0:####0.######} КБ ({entityFile.Data.Length / (1024.0 * 1024.0):####0.######} МБ) Created");
 
+				return true;
 			}
 			catch (WebException ex)
 			{
@@ -77,27 +53,14 @@ namespace NextCloudFileUploader.WebDav
 			}
 		}
 
-		/// <summary>
-		/// Создает и выполняет запрос для создания дочерней папки в родительской папке в хранилище.
-		/// </summary>
-		/// <param name="url">Родительская папка</param>
-		/// <param name="remoteFolderPath">Дочерняя папка</param>
-		/// <param name="currentIndex">Индекс данной создаваемой папки среди всех создаваемых папок.</param>
-		/// <param name="total">Количество создаваемых папок</param>
-		public async Task<bool> Mkcol(string url, string remoteFolderPath, int currentIndex, int total)
+		// Создает и выполняет запрос для создания дочерней папки в родительской папке в хранилище.
+		public async Task<bool> Mkcol(string url, string remoteFolderPath)
 		{
 			if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(remoteFolderPath)) return false;
 			try
 			{
-				var httpMkColRequest = (HttpWebRequest)WebRequest.Create(url + remoteFolderPath);
-
-				httpMkColRequest.Credentials = new NetworkCredential(UserName, Password);
-				httpMkColRequest.PreAuthenticate = true;
-				httpMkColRequest.Method = @"MKCOL";
-
-				var result = (HttpWebResponse)await httpMkColRequest.GetResponseAsync();
-				Log.Info(Utils.ShowPercentProgress("Создаём папки", currentIndex, total));
-				Log.Info($"Папка: {remoteFolderPath} {result.StatusDescription}");
+				await Session.CreateDirectoryAsync(remoteFolderPath);
+				Log.Info($"Папка: {remoteFolderPath} Created");
 
 				return true;
 			}
@@ -105,7 +68,6 @@ namespace NextCloudFileUploader.WebDav
 			{
 				if (ex.Message.Contains("405"))
 				{
-					Log.Info(Utils.ShowPercentProgress("Создаём папки", currentIndex, total));
 					Log.Info($"Папка: {remoteFolderPath} {ex.Message}");
 					return false;
 				}
@@ -113,6 +75,12 @@ namespace NextCloudFileUploader.WebDav
 				throw ex;
 
 			}
+		}
+		
+		private WebDavSession CreateSession(string login, string password, string url) {
+			var credentials = new NetworkCredential(login, password);
+			var session     = new WebDavSession(url, credentials);
+			return session;
 		}
 	}
 

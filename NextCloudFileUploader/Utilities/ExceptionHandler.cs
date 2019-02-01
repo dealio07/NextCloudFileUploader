@@ -8,10 +8,7 @@ namespace NextCloudFileUploader.Utilities
 	{
 		private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 		
-		/// <summary>
-		/// Выписывает информацию по возникшей ошибке в консоль.
-		/// </summary>
-		/// <param name="ex">Ошибка</param>
+		// Выписывает информацию по возникшей ошибке в консоль.
 		public static void LogExceptionToConsole(Exception ex)
 		{
 			Console.WriteLine($"{Environment.NewLine}------------------------- Ошибка в {ex.TargetSite.Name} -------------------------");

@@ -8,12 +8,7 @@ namespace NextCloudFileUploader.Utilities
 	{
 		private static readonly ILog Log = LogManager.GetLogger("NextCloudFileUploader.Program");
 
-		/// <summary>
-		/// Показывает прогресс выполняемого процесса
-		/// </summary>
-		/// <param name="message">Отображаемое сообщение</param>
-		/// <param name="processed">Обработано объектов</param>
-		/// <param name="total">Общее количество объектов</param>
+		// Показывает прогресс выполняемого процесса
 		public static string ShowPercentProgress(string message, long processed, long total)
 		{
 			var percent = 100 * (processed + 1) / total;
@@ -26,14 +21,7 @@ namespace NextCloudFileUploader.Utilities
 			return info;
 		}
 		
-		/// <summary>
-		/// Показывает прогресс выполняемого процесса
-		/// </summary>
-		/// <param name="message">Отображаемое сообщение</param>
-		/// <param name="processed">Обработано объектов</param>
-		/// <param name="total">Общее количество объектов</param>
-		/// <param name="processedByte">Отправлено байт</param>
-		/// <param name="totalBytes">Общее количество байт</param>
+		// Показывает прогресс выполняемого процесса
 		public static string ShowPercentProgress(string message, long processed, long total, long processedByte, long totalBytes)
 		{
 			var percent = 100 * (processed + 1) / total;
@@ -47,13 +35,7 @@ namespace NextCloudFileUploader.Utilities
 			return info;
 		}
 		
-		/// <summary>
-		/// Разбивает список на под-списки.
-		/// </summary>
-		/// <param name="bigList">Основной список, который следует разбить</param>
-		/// <param name="nSize">Размер под-списка</param>
-		/// <typeparam name="T">Тип элементов списка</typeparam>
-		/// <returns>Возвращает под-списки основного списка указанного размера.</returns>
+		// Разбивает список на под-списки.
 		public static IEnumerable<List<T>> SplitList<T>(List<T> bigList, int nSize)
 		{
 			for (var i = 0; i < bigList.Count; i += nSize)

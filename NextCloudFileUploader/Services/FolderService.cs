@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NextCloudFileUploader.Utilities;
@@ -17,31 +15,23 @@ namespace NextCloudFileUploader.Services
 			_webDavProvider = webDavProvider;
 		}
 
-		/// <summary>
-		/// Создает папки из сгруппированного списка
-		/// </summary>
-		/// <param name="groupedFolderNameList">Сгруппированный список папок</param>
-		public async Task<bool> CreateFoldersFromGroupedList(IEnumerable<string> groupedFolderNameList)
+		// Создает папки из сгруппированного списка
+		public async Task<bool> CreateFolders(string folderNames)
 		{
-			if (groupedFolderNameList == null) throw new Exception("Список папок пуст.");
-			var current = 0;
-			var enumerable = groupedFolderNameList.ToList();
-			if (enumerable.Count == 0) return false;
-			foreach (var folderName in enumerable)
+			try
 			{
-				try
+				var folders = folderNames.Split(new []{@"\"}, StringSplitOptions.None);
+				var folderPath = string.Empty;
+				foreach (var folderName in folders)
 				{
-					await _webDavProvider.Mkcol(_webDavProvider.ServerUrl, folderName, current, enumerable.Count);
+					folderPath += $@"\{folderName}";
+					await _webDavProvider.Mkcol(_webDavProvider.ServerUrl, folderPath);
 				}
-				catch (Exception ex)
-				{
-					ExceptionHandler.LogExceptionToConsole(ex);
-					throw ex;
-				}
-				finally
-				{
-					Interlocked.Increment(ref current);
-				}
+			}
+			catch (Exception ex)
+			{
+				ExceptionHandler.LogExceptionToConsole(ex);
+				throw ex;
 			}
 
 			return true;

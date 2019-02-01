@@ -21,32 +21,18 @@ namespace NextCloudFileUploader.Services
 			_webDavProvider = webDavProvider;
 		}
 
-        /// <summary>
-        /// Выгружает файлы в хранилище.
-        /// </summary>
-        /// <param name="fileList">Список файлов, которые следует выгрузить</param>
-        /// /// <param name="allFiles">Список всех файлов сущности</param>
-        public async Task<bool> UploadFiles(IEnumerable<EntityFile> fileList, IEnumerable<EntityFile> allFiles)
+        // Выгружает файлы в хранилище.
+        public async Task<bool> UploadFile(EntityFile file)
 		{
-			var files = fileList.ToList();
-			var current = 0;
-
-			foreach (var file in files)
+			try
 			{
-				try
-				{
-					await _webDavProvider.PutWithHttp(file, allFiles);
-				}
-				catch (Exception ex)
-				{
-					Log.Error($"Ошибка при выгрузке файла #{file.Number.ToString()}");
-					ExceptionHandler.LogExceptionToConsole(ex);
-					throw ex;
-				}
-				finally
-				{
-					Interlocked.Increment(ref current);
-				}
+				await _webDavProvider.PutWithHttp(file);
+			}
+			catch (Exception ex)
+			{
+				Log.Error($"Ошибка при выгрузке файла #{file.Number.ToString()}");
+				ExceptionHandler.LogExceptionToConsole(ex);
+				throw ex;
 			}
 
 			return true;

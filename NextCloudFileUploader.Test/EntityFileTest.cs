@@ -21,7 +21,7 @@ namespace NextCloudFileUploader.Test
 			Assert.NotNull(file.FileId);
 			Assert.False(Guid.Empty == Guid.Parse(file.FileId));
 			Assert.NotNull(file.Version);
-			Assert.True(file.Version == "1");
+			Assert.True(file.Version == 1);
 			Assert.NotNull(file.Data);
 			Assert.NotEmpty(file.Data);
 			Assert.True(file.Data.Length == 1);
@@ -58,21 +58,6 @@ namespace NextCloudFileUploader.Test
 			Assert.NotNull(file.EntityId);
 			Assert.NotNull(file.FileId);
 			Assert.Equal($"AccountFile/{entityId.ToString()}/{fileId.ToString()}/", remoteFolderPath);
-		}
-
-		[Fact]
-		public void SplitsFolderName()
-		{
-			var entityId = Guid.NewGuid();
-			var fileId   = Guid.NewGuid();
-			var file     = new EntityFile(1, "AccountFile", entityId, fileId, 1, new byte[] {0});
-
-			Assert.NotNull(file);
-			Assert.NotNull(file.FolderNames);
-			Assert.NotEmpty(file.FolderNames);
-			Assert.Equal("AccountFile", file.FolderNames[0]);
-			Assert.Equal(entityId.ToString(), file.FolderNames[1]);
-			Assert.Equal(fileId.ToString(), file.FolderNames[2]);
 		}
 	}
 }

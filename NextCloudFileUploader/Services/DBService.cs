@@ -1,63 +1,64 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
 using System.Linq;
+using System.Threading.Tasks;
 using NextCloudFileUploader.Entities;
 using NextCloudFileUploader.Utilities;
 using Dapper;
 
 namespace NextCloudFileUploader.Services
 {
-	public class DBService
+	public class DbService
 	{
-		private IDbConnection _dbConnection;
+		private string _dbConnectionString;
 		
-		public DBService(IDbConnection dbConnection)
+		public DbService(string connectionString)
 		{
-			_dbConnection   = dbConnection;
+			_dbConnectionString = connectionString;
 		}
 		
-		/// <summary>
-		/// Выбирает из базы все файлы по имени сущности за исключением файлов, загруженных при предыдущем запуске.
-		/// </summary>
-		/// <param name="entity">Название сущности</param>
-		/// <param name="fromNumber">Порядковый номер файла (номер записи в таблице),
-		/// с которого будет произведена выборка</param>
-		/// <returns>Возвращает файлы для выгрузки в хранилище</returns>
-		public IEnumerable<EntityFile> GetFilesFromDb(string entity, string fromNumber)
+		// Выбирает из базы все файлы по имени сущности за исключением файлов, загруженных при предыдущем запуске.
+		public async Task<IEnumerable<EntityFile>> GetHundredFilesFromDbByEntityAsync(int fromNumber)
 		{
+			var dbConnection = new SqlConnection(_dbConnectionString);
+         			try
+         			{
+         				if ((dbConnection.State & ConnectionState.Open) == 0)
+         					dbConnection.Open();
+         
+         				var cmdSqlCommand = $@"SELECT TOP(100) * FROM [dbo].[DODocuments]
+         				WITH (NOLOCK)
+         				WHERE Number >= {fromNumber}
+         				ORDER BY Number ASC;";
+         
+         				return (await dbConnection.QueryAsync<EntityFile>(cmdSqlCommand)).ToList();
+         			}
+         			catch (Exception ex)
+         			{
+         				ExceptionHandler.LogExceptionToConsole(ex);
+         				throw ex;
+         			}
+         			finally
+         			{
+         				if ((dbConnection.State & ConnectionState.Open) != 0) dbConnection.Close();
+         			}
+         		}
+		
+		// Выбирает количество файлов (записей в БД)
+		public async Task<int> GetFilesCountAsync(int fromNumber)
+		{
+			var dbConnection = new SqlConnection(_dbConnectionString);
 			try
 			{
-				if ((_dbConnection.State & ConnectionState.Open) == 0)
-					_dbConnection.Open();
+				if ((dbConnection.State & ConnectionState.Open) == 0)
+					dbConnection.Open();
 
-				var cmdSqlCommand = "";
-				if (entity.Equals("Account") || entity.Equals("Contact"))
-					cmdSqlCommand = 
-							$@"SELECT TOP(100) d.Number, d.Entity, d.EntityId, d.FileId, d.Version, af.Data 
-								FROM [dbo].[DODocuments] d
-								WITH (NOLOCK)
-								INNER JOIN [dbo].[{entity}File] af ON af.Id = d.FileId
-								WHERE af.{entity}Id = d.EntityId
-									AND d.Version = af.Version
-									AND d.Entity = '{entity}File'
-									AND DATALENGTH(af.Data) > 0
-									AND d.Number >= {fromNumber}
-								ORDER BY d.Number ASC;";
-				if (entity.Equals("Contract"))
-					cmdSqlCommand = 
-							$@"SELECT TOP(100) d.Number, d.Entity, d.EntityId, d.FileId, d.Version, fv.PTData as 'Data' 
-								FROM [dbo].[DODocuments] d 
-								WITH (NOLOCK)
-								INNER JOIN [dbo].[PTFileVersion] fv ON fv.PTFile = d.FileId
-									AND d.Version = fv.PTVersion
-								WHERE d.Version = fv.PTVersion
-									AND d.Entity = '{entity}File'
-									AND DATALENGTH(fv.PTData) > 0
-									AND d.Number >= {fromNumber}
-								ORDER BY d.Number ASC;";
+				var cmdSqlCommand = $@"SELECT COUNT(*) FROM [dbo].[DODocuments] 
+										WHERE Number >= {fromNumber};";
 
-				return _dbConnection.Query<EntityFile>(cmdSqlCommand).ToList();
+				return await dbConnection.QuerySingleAsync<int>(cmdSqlCommand);
 			}
 			catch (Exception ex)
 			{
@@ -66,29 +67,31 @@ namespace NextCloudFileUploader.Services
 			}
 			finally
 			{
-				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+				if ((dbConnection.State & ConnectionState.Open) != 0) dbConnection.Close();
 			}
 		}
-
-		/// <summary>
-		/// Выбирает количество файлов (записей в БД) по сущности
-		/// </summary>
-		/// <param name="entity">Сущность</param>
-		/// <param name="fromNumber">Порядковый номер файла (номер записи в таблице),
-		/// с которого будет произведена выборка</param>
-		/// <returns>Возвращает количество файлов по сущности</returns>
-		public int GetFilesCount(string entity, string fromNumber)
+		
+		// Выбирает данные файла
+		public async Task<byte[]> GetFileDataAsync(string id, int version, string entity)
 		{
+			var dbConnection = new SqlConnection(_dbConnectionString);
 			try
 			{
-				if ((_dbConnection.State & ConnectionState.Open) == 0)
-					_dbConnection.Open();
+				if ((dbConnection.State & ConnectionState.Open) == 0)
+					dbConnection.Open();
 
-				var cmdSqlCommand = $@"SELECT COUNT(*) FROM [dbo].[DODocuments] d 
-										WHERE d.Entity = '{entity}File'
-										AND d.Number >= {fromNumber};";
+				var table = entity.Equals("ContractFile") ? "PTFileVersion" : $"{entity}";
+				var idCol = entity.Equals("ContractFile") ? "PTFile" : "Id";
+				var versionCol = entity.Equals("ContractFile") ? "PTVersion" : "Version";
+				var dataCol = entity.Equals("ContractFile") ? "PTData" : "Data";
+				
+				var cmdSqlCommand = $@"SELECT {dataCol} FROM [dbo].[{table}] 
+				WITH (NOLOCK)
+				WHERE {idCol} = '{id}'
+					AND {versionCol} = {version}
+					AND DATALENGTH({dataCol}) > 0";
 
-				return _dbConnection.QuerySingle<int>(cmdSqlCommand);
+				return await dbConnection.QuerySingleAsync<byte[]>(cmdSqlCommand);
 			}
 			catch (Exception ex)
 			{
@@ -97,7 +100,7 @@ namespace NextCloudFileUploader.Services
 			}
 			finally
 			{
-				if ((_dbConnection.State & ConnectionState.Open) != 0) _dbConnection.Close();
+				if ((dbConnection.State & ConnectionState.Open) != 0) dbConnection.Close();
 			}
 		}
 	}
