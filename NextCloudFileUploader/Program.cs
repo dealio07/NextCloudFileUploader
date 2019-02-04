@@ -1,23 +1,20 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
-using System.Data.SqlClient;
 using System.Diagnostics;
-using NextCloudFileUploader.Entities;
 using NextCloudFileUploader.Services;
-using NextCloudFileUploader.Utilities;
 using NextCloudFileUploader.WebDav;
 using System.Configuration;
-using System.Linq;
-using System.Threading;
+using log4net;
 using log4net.Config;
 
 namespace NextCloudFileUploader
 {
 	public static class Program
 	{
+		private static readonly ILog Log = LogManager.GetLogger("NextCloudFileUploader");
+		
 		[STAThread]
 		public static void Main()
 		{
@@ -30,64 +27,59 @@ namespace NextCloudFileUploader
 				var webDavProvider = new WebDavProvider(appConfig["serverUrl"], appConfig["nextCloudUserName"],
 														appConfig["nextCloudPassword"]);
 				var folderService = new FolderService(webDavProvider);
-				var fileService   = new FileService(webDavProvider);
-				var dbService   = new DbService(appConfig["connStr"]);
+				var dbService = new DbService(appConfig["connStr"]);
 
-				Utils.LogInfoAndWriteToConsole("Приложение стартовало.");
+				Log.Info("Starting the application.");
 
-				Upload(dbService, appConfig, fileService, folderService).Wait();
+				Upload(dbService, appConfig, folderService, webDavProvider, appConfig["root"]);
 				
 				progWatch.Stop();
-				Utils.LogInfoAndWriteToConsole($"Приложение успешно завершило работу за {progWatch.Elapsed.Hours.ToString()} ч {progWatch.Elapsed.Minutes.ToString()} м {progWatch.Elapsed.Seconds.ToString()} с {progWatch.Elapsed.Milliseconds.ToString()} мс");
+				Log.Info($"Uploading successfully done in {progWatch.Elapsed.Hours.ToString()} h {progWatch.Elapsed.Minutes.ToString()} m {progWatch.Elapsed.Seconds.ToString()} s {progWatch.Elapsed.Milliseconds.ToString()} ms.");
 			}
 			catch (Exception ex)
 			{
-				Utils.LogInfoAndWriteToConsole("Приложение завершило работу с ошибкой.");
-				ExceptionHandler.LogExceptionToConsole(ex);
+				Log.Error("Uploading ended with error.", ex);
 			}
 		}
 
-		private static async Task Upload(DbService           dbService, NameValueCollection appConfig,
-										 FileService         fileService, FolderService folderService)
+		private static void Upload(DbService dbService, NameValueCollection appConfig,
+									FolderService folderService, WebDavProvider webDavProvider, string rootFolder)
 		{
-			var from                 = int.Parse(appConfig["fromNumber"]);
+			var from = int.Parse(appConfig["fromNumber"]);
 			var entityFilesTotalSize = 0;
 			while (true)
 			{
-				var fileList = (await dbService.GetHundredFilesFromDbByEntityAsync(from)).ToList();
-				Utils.LogInfoAndWriteToConsole($"[ Получено {fileList.Count} файлов ]");
+				var fileList = dbService.GetHundredFilesFromDbAsync(from);
+				Log.Info($"Received {fileList.Count} files");
 				if (fileList.Count == 0)
 					break;
 				
 				from += fileList.Count;
 
-				var rangePartitioner = Partitioner.Create(0, fileList.Count, 50);
+				var rangePartitioner = Partitioner.Create(0, fileList.Count, 10);
 				Parallel.ForEach(rangePartitioner, (range, loopState) =>
 				{
 					for (var i = range.Item1; i < range.Item2; i++)
 					{
-						var file = fileList[i];
 						try
 						{
-							file.Data = dbService.GetFileDataAsync(file.FileId, file.Version, file.Entity).Result;
+							var file = fileList[i];
+							file.Data = dbService.GetFileDataAsync(file.FileId, file.Version, file.Entity);
 							if (file.Data == null) continue;
 							entityFilesTotalSize += file.Data.Length;
-							folderService.CreateFolders(file.GetRemoteFolderPath()).Wait();
-							fileService.UploadFile(file).Wait();
+							folderService.CreateFolders(file.GetRemoteFolderPath(), rootFolder);
+							webDavProvider.PutWithHttp(file, rootFolder).Wait();
 						}
 						catch (Exception ex)
 						{
-							Utils.LogInfoAndWriteToConsole($"Error on file #{file.Number}");
-							ExceptionHandler.LogExceptionToConsole(ex);
-							//throw ex;
+							Log.Error($@"Failed uploading file {fileList[i].Number} {fileList[i].GetRemotePath()}.");
+							throw;
 						}
 					}
 				});
-				
 			}
 
-			Utils.LogInfoAndWriteToConsole(
-					$">>> Объем выгруженных файлов: {entityFilesTotalSize / 1024.0:####0.######} КБ ({entityFilesTotalSize / (1024.0 * 1024.0):####0.######} МБ) <<<");
+			Log.Info($"Total size of files: {entityFilesTotalSize / 1024.0:####0.###} KB");
 		}
 	}
 }

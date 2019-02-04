@@ -20,7 +20,6 @@ namespace NextCloudFileUploader.Test
 			Assert.False(Guid.Empty == Guid.Parse(file.EntityId));
 			Assert.NotNull(file.FileId);
 			Assert.False(Guid.Empty == Guid.Parse(file.FileId));
-			Assert.NotNull(file.Version);
 			Assert.True(file.Version == 1);
 			Assert.NotNull(file.Data);
 			Assert.NotEmpty(file.Data);
@@ -40,7 +39,6 @@ namespace NextCloudFileUploader.Test
 			Assert.NotNull(file.Entity);
 			Assert.NotNull(file.EntityId);
 			Assert.NotNull(file.FileId);
-			Assert.NotNull(file.Version);
 			Assert.Equal($"AccountFile/{entityId.ToString()}/{fileId.ToString()}/1", remotePath);
 		}
 

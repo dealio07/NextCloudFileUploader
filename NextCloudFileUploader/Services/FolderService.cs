@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using NextCloudFileUploader.Utilities;
+using System.Linq;
 using NextCloudFileUploader.WebDav;
 
 namespace NextCloudFileUploader.Services
@@ -15,26 +13,18 @@ namespace NextCloudFileUploader.Services
 			_webDavProvider = webDavProvider;
 		}
 
-		// Создает папки из сгруппированного списка
-		public async Task<bool> CreateFolders(string folderNames)
+		// Creates directories in cloud by path string.
+		public void CreateFolders(string folderNames, string rootFolder)
 		{
-			try
+			var folders = folderNames.Split(new[] {@"/"}, StringSplitOptions.None).ToList();
+			if (!string.IsNullOrEmpty(rootFolder))
+				folders.Insert(0, rootFolder);
+			var folderPath = string.Empty;
+			foreach (var folderName in folders)
 			{
-				var folders = folderNames.Split(new []{@"\"}, StringSplitOptions.None);
-				var folderPath = string.Empty;
-				foreach (var folderName in folders)
-				{
-					folderPath += $@"\{folderName}";
-					await _webDavProvider.Mkcol(_webDavProvider.ServerUrl, folderPath);
-				}
+				folderPath += $@"/{folderName}";
+				_webDavProvider.CreateDirectory(_webDavProvider.ServerUrl, folderPath).Wait();
 			}
-			catch (Exception ex)
-			{
-				ExceptionHandler.LogExceptionToConsole(ex);
-				throw ex;
-			}
-
-			return true;
 		}
 	}
 }

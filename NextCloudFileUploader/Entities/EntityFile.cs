@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace NextCloudFileUploader.Entities
 {
@@ -35,12 +33,12 @@ namespace NextCloudFileUploader.Entities
 
 		public string GetRemotePath()
 		{
-			return $@"{Entity}\{EntityId}\{FileId}\{Version}";
+			return $@"{Entity}/{EntityId}/{FileId}/{Version}";
 		}
 
 		public string GetRemoteFolderPath()
 		{
-			return $@"{Entity}\{EntityId}\{FileId}\";
+			return $@"{Entity}/{EntityId}/{FileId}/";
 		}
 		
 		public override string ToString()
