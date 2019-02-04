@@ -70,7 +70,7 @@ namespace NextCloudFileUploader
 							folderService.CreateFolders(file.GetRemoteFolderPath(), rootFolder);
 							webDavProvider.PutWithHttp(file, rootFolder).Wait();
 						}
-						catch (Exception ex)
+						catch (Exception)
 						{
 							Log.Error($@"Failed uploading file {fileList[i].Number} {fileList[i].GetRemotePath()}.");
 							throw;
